@@ -34,17 +34,12 @@ from torch.nn.parallel.scatter_gather import gather, scatter
 from torch.nn.parameter import Parameter
 from torch.optim.lr_scheduler import _LRScheduler
 
-from dataclasses import dataclass
 from typing import Callable
 
-@dataclass
-class AbstractDeviceConfig:
+from .abstract_operator import AbstractOperator
 
-    device_uid: int = 0
-    device_name: str = None
-
-    is_computational: bool = False
-    is_transferatble: bool = False
-
-    def __post_init__(self):
+class AbstractMetric:
+    def __init__(self) -> None:
+        pass    
+    def apply(self, operators: list(AbstractOperator)) -> list(AbstractOperator):
         pass

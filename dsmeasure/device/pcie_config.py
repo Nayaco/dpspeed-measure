@@ -6,11 +6,12 @@ from typing import Callable
 import torch
 import torch.nn.functional as F
 
-from dsmeasure.core.abstract_device_config import AbstractDeviceConfig
+from dsmeasure.core.abstract_device import AbstractDeviceConfig
 
 @dataclass
 class DevicePCIEConfig(AbstractDeviceConfig):
-    
+    """
+    """
     pcie_bandwidth_source: AbstractDeviceConfig = None
     pcie_bandwidth_target: AbstractDeviceConfig = None
     

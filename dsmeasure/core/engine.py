@@ -37,11 +37,8 @@ from torch.optim.lr_scheduler import _LRScheduler
 # from typing import Callable
 
 class CostEngine:
-    def __init__(self, caught_profile, caught_device) -> None:
-        
-    def evaluate_cost(self):
+    def __init__(self):
+        pass
     
-
-    
-
-        
+    def evaluation(self):
+        pass

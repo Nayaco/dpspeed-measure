@@ -35,20 +35,35 @@ from torch.nn.parameter import Parameter
 from torch.optim.lr_scheduler import _LRScheduler
 
 from dataclasses import dataclass
-from typing import Callable, Tuple
+from typing import Callable, Any
 
 @dataclass
-class AbstractOperatorConfig:
+class AbstractDeviceConfig:
     """
-    
+    basic device config, inlcude:
+    device uid
+    device name
     """
-    op_uid: int = 0
-    op_name: str = None
+    device_uid: int = 0
+    device_name: str = None
 
-    tensor_input_shape: Tuple(int) = (1)
-    tensor_output_shape: Tuple(int) = (1)
-
-    compute_cost_func: Callable = None
+    is_computational: bool = False
+    is_transferatble: bool = False
 
     def __post_init__(self):
+        pass
+
+class AbstractDevice:
+    """
+    """
+    def __init__(self) -> None:
+        pass
+
+    def occupy(self, run_time: int, callback: Callable[..., Any] | None, **kwargs):
+        pass
+
+    def run(self, interval: int):
+        pass
+
+    def sync(self):
         pass

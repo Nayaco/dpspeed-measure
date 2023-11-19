@@ -6,12 +6,19 @@ from typing import Callable, List
 import torch
 import torch.nn.functional as F
 
-from dsmeasure.core.abstract_device_config import AbstractDeviceConfig
+from dsmeasure.core.abstract_device import AbstractDeviceConfig
 
 from .pcie_config import DevicePCIEConfig
-from .gpu_config import DeviceCUDAConfig
+from .gpu import DeviceCUDAConfig
 
 class Server2U:
+    """
+    server 2u:
+    CUDA-0          CUDA-1
+    PCIE |---NUMA---| PCIE
+    DRAM
+
+    """
     def __init__(self, 
                  pcie_config_d2d: DevicePCIEConfig, 
                  pcie_config_d2h: DevicePCIEConfig, 
