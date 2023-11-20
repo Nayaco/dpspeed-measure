@@ -34,11 +34,37 @@ from torch.nn.parallel.scatter_gather import gather, scatter
 from torch.nn.parameter import Parameter
 from torch.optim.lr_scheduler import _LRScheduler
 
-# from typing import Callable
+from dsmeasure.core.abstract_operator import AbstractOperatorConfig, AbstractOperator
 
 class CostEngine:
     def __init__(self):
-        pass
+        self.max_cuda_memory = 0
+        self.current_cuda_memory = 0
+        
+        self.total_cuda_util = 0.0
+        self.total_pcie_util = 0.0
+        
+        self.cuda_util_trace = []
+        self.pcie_util_trace = []
+        self.cuda_memory_trace = []
     
-    def evaluation(self):
-        pass
+    def reset(self):
+        self.max_cuda_memory = 0
+        self.current_cuda_memory = 0
+        self.total_cuda_util = 0.0
+        self.total_pcie_util = 0.0
+        self.cuda_util_trace = []
+        self.pcie_util_trace = []
+        self.cuda_memory_trace = []
+
+    def evaluation(self, operators: list[tuple[int, AbstractOperator]]):
+        """
+        evaluation the operators
+            operators: list(tuple(int, AbstractOperator))
+                arrive time, operator
+        """
+        self.reset()
+        
+
+
+        

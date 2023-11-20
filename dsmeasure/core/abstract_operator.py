@@ -35,7 +35,8 @@ from torch.nn.parameter import Parameter
 from torch.optim.lr_scheduler import _LRScheduler
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Tuple
+from abc import abstractmethod
 
 @dataclass
 class AbstractOperatorConfig:
@@ -45,7 +46,8 @@ class AbstractOperatorConfig:
     op_uid: int = 0
     op_name: str = None
 
-    is_computational = True
+    is_computational = False
+    is_prime = False
 
     def __post_init__(self):
         pass
@@ -66,14 +68,15 @@ class AbstractOperator:
         next_op._prev.append(self)
     
     """
-    **tensor_in: tensor shapes
+    *tensor_in: tensor shapes
     return operator excution time and output tensor shape 
     """
-    def apply(self, *tensor_in: torch.Tensor) -> tuple(int, torch.Tensor):
+    @abstractmethod
+    def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
         pass
     
     def __repr__(self) -> str:
-        return "<%d, %s>" % (self._config.op_uid, self._config.op_name)
+        return "<operator-%3d, %s>" % (self._config.op_uid, '{0: <5}'.format(self._config.op_name or 'None'))
     
     def __len__(self) -> int:
         return 0 if self._next is None else len(self._next)

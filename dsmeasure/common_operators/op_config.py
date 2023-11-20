@@ -12,18 +12,25 @@ from dsmeasure.core.abstract_operator import AbstractOperatorConfig
 class OperatorComputationalConfig(AbstractOperatorConfig):
     """
     """
-    operator_device_uid: list[int] = []
-    
     def __post_init__(self):
         super().__post_init__()
         self.is_computational = True
+        self.is_prime = True
   
 @dataclass
 class OperatorNonComputationalConfig(AbstractOperatorConfig):
     """
     """
-    operator_device_uid: list[int] = []
-    
     def __post_init__(self):
         super().__post_init__()
         self.is_computational = False
+        self.is_prime = True
+
+@dataclass
+class OperatorCustomConfig(AbstractOperatorConfig):
+    """
+    """
+    def __post_init__(self):
+        super().__post_init__()
+        self.is_computational = False
+        self.is_prime = False

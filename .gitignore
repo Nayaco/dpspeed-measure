@@ -1,2 +1,4 @@
 
 .DS_Store
+raw_data
+__pycache__
