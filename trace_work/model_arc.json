@@ -11,123 +11,156 @@
             "id":1,
             "type":0,
             "Description": "FusedLayerNormAffineFunction",
-            "Operator_time":0.067
+            "Operator_time":0.067,
+            "Size":28,
+            "Size function":"2sbh"
         }
     ],
     "Forward body Operator - recursive":[
         {
             "id":2,
             "type":0,
-            "Description": "Self-Attention-Linear-Q*K",
-            "Operator_time":0.7
+            "Description": "QKV_Linear",
+            "Operator_time":0.49,
+            "Size":42,
+            "Size function":"6sbh/T"
         },
         {
             "id":3,
             "type":0,
-            "Description": "Softmax",
-            "Operator_time":0.163
+            "Description": "Self-Attention-Q*K",
+            "Operator_time":0.214,
         },
         {
             "id":4,
             "type":0,
-            "Description": "Dropout",
-            "Operator_time":0.286
+            "Description": "Softmax",
+            "Operator_time":0.163,
+            "size":128,
+            "Size function":"2bass/T"
         },
         {
             "id":5,
             "type":0,
-            "Description": "Self-Attention-Linear-Q*K*V",
-            "Operator_time":0.191
+            "Description": "Dropout",
+            "Operator_time":0.286,
+            "size":192,
+            "Size function":"bass/T+2bass/T"
         },
         {
             "id":6,
             "type":0,
-            "Description": "Attention_Linear",
-            "Operator_time":0.191
+            "Description": "Self-Attention-Q*K*V",
+            "Operator_time":0.191,
+            "size":14,
+            "Size function":"2sbh/T"
         },
         {
             "id":7,
+            "type":0,
+            "Description": "Attention_Linear",
+            "Operator_time":0.146,
+            //"size":28,
+            //"Size function":"2sbh"
+
+        },
+        {
+            "id":8,
             "type":1,
             "Description": "Attention_forward_AllReduce",
             "Operator_time":2.2
         },
         {
-            "id":8,
-            "type":0,
-            "Description": "Attention_Dropout",
-            "Operator_time":0.14
-        },
-        {
             "id":9,
             "type":0,
-            "Description": "FusedLayerNormAffineFunction",
-            "Operator_time":0.067
+            "Description": "Attention_Dropout",
+            "Operator_time":0.14,
+            "size":42,
+            "Size function":"sbh+2sbh"
         },
         {
             "id":10,
-            "type":2,
-            "Description": "Memory Allocation",
-            "Operator_time":0.182
+            "type":0,
+            "Description": "FusedLayerNormAffineFunction",
+            "Operator_time":0.067,
+            "size":28,
+            "Size function":"2sbh"
         },
         {
             "id":11,
-            "type":0,
-            "Description": "MLP_Linear_1",
-            "Operator_time":0.512
+            "type":2,
+            "Description": "bubble",
+            "Operator_time":0.182
         },
         {
             "id":12,
             "type":0,
-            "Description": "GeLU_1",
-            "Operator_time":0.428
+            "Description": "MLP_Linear_1",
+            "Operator_time":0.512,
+            "size":56,
+            "Size function":"8sbh/T"
         },
         {
             "id":13,
             "type":0,
-            "Description": "MLP_Linear_2",
-            "Operator_time":0.483
+            "Description": "GeLU_1",
+            "Operator_time":0.428,
+            "size":56,
+            "Size function":"8sbh/T"
         },
         {
             "id":14,
+            "type":0,
+            "Description": "MLP_Linear_2",
+            "Operator_time":0.483,
+            //"size":28,
+            //"Size function":"2sbh"
+        },
+        {
+            "id":15,
             "type":1,
             "Description": "MLP_forward_AllReduce",
             "Operator_time":2.2
         },
         {
-            "id":15,
+            "id":16,
             "type":0,
             "Description": "add",
             "Operator_time":0.067
         },
         {
-            "id":16,
-            "type":0,
-            "Description": "Dropout",
-            "Operator_time":0.075
-        },
-        {
             "id":17,
             "type":0,
+            "Description": "Dropout",
+            "Operator_time":0.075,
+            "size":42,
+            "Size function":"sbh+2sbh"
+        },
+        {
+            "id":18,
+            "type":0,
             "Description": "FusedLayerNormAffineFunction",
-            "Operator_time":0.067
+            "Operator_time":0.067,
+            "Size":28,
+            "Size function":"2sbh"
         }
     ],
 
     "Forward tail Operator":[
         {
-            "id":18,
+            "id":19,
             "type":0,
             "Description": "Linear",
             "Operator_time":3.162
         },
         {
-            "id":19,
+            "id":20,
             "type":0,
             "Description": "others",
             "Operator_time":4.2
         },
         {
-            "id":20,
+            "id":21,
             "type":0,
             "Description": "CrossEntropy",
             "Operator_time":4.38
@@ -136,13 +169,13 @@
     
     "Backward head Operator":[
         {
-            "id":21,
+            "id":22,
             "type":0,
             "Description": "Backward oprations",
             "Operator_time":8
         },
         {
-            "id":22,
+            "id":23,
             "type":0,
             "Description": "FusedLayerNormAffineFunctionBackward",
             "Operator_time":0.066
@@ -152,121 +185,121 @@
 
     "Backward body Operator - recursive":[
         {
-            "id":23,
+            "id":24,
             "type":0,
             "Description": "add",
             "Operator_time":0.06
         },
         {
-            "id":24,
+            "id":25,
             "type":0,
             "Description": "dropout_backward",
             "Operator_time":0.053 
         },
         {
-            "id":25,
+            "id":26,
             "type":0,
             "Description": "sum + add",
             "Operator_time":0.049
         },
         {
-            "id":26,
+            "id":27,
             "type":0,
             "Description": "MLP_Linear_2_back",
             "Operator_time":0.1
         },
         {
-            "id":27,
+            "id":28,
             "type":0,
             "Description": "GeLU",
             "Operator_time":0.21
         },
         {
-            "id":28,
+            "id":29,
             "type":0,
             "Description": "MLP_Linear_1_back",
             "Operator_time":0.442
         },
         {
-            "id":29,
+            "id":30,
             "type":1,
             "Description": "MLP_backward_AllReduce",
             "Operator_time":2.231
         },
         {
-            "id":30,
+            "id":31,
             "type":0,
             "Description": "Accumulate_add",
             "Operator_time":0.032
         },
         {
-            "id":31,
+            "id":32,
             "type":0,
             "Description": "FusedLayerNormAffineFunctionBackward",
             "Operator_time":0.222
         },
         {
-            "id":32,
+            "id":33,
             "type":0,
             "Description": "add",
             "Operator_time":0.01
         },
         {
-            "id":33,
+            "id":34,
             "type":0,
             "Description": "Dropout_backward",
             "Operator_time":0.055
         },
         {
-            "id":34,
+            "id":35,
             "type":0,
             "Description": "sum + add",
             "Operator_time":0.1
         },
         {
-            "id":35,
+            "id":36,
             "type":0,
             "Description": "Attention_Linear",
             "Operator_time":0.25
         },
         {
-            "id":36,
+            "id":37,
             "type":0,
-            "Description": "Self-Attention-Linear-Q*K*V",
+            "Description": "Self-Attention-Q*K*V",
             "Operator_time":0.36
         },
         {
-            "id":37,
+            "id":38,
             "type":0,
             "Description": "Dropout",
             "Operator_time":0.248
         },
         {
-            "id":38,
+            "id":39,
             "type":0,
             "Description": "Softmax",
             "Operator_time":0.212
         },
         {
-            "id":39,
+            "id":40,
             "type":0,
             "Description": "Self-Attention-Q*K",
             "Operator_time":0.531
         },
         {
-            "id":40,
+            "id":41,
             "type":0,
             "Description": "Linear_back",
             "Operator_time":0.34
         },
         {
-            "id":41,
+            "id":42,
             "type":1,
             "Description": "Attention_backward_AllReduce",
             "Operator_time":2.275
         },
         {
-            "id":42,
+            "id":43,
             "type":0,
             "Description": "FusedLayerNormAffineFunctionBackward",
             "Operator_time":0.236
@@ -275,7 +308,7 @@
 
     "Backward tail Operator":[
         {
-            "id":43,
+            "id":44,
             "type":0,
             "Description": "Backward end",
             "Operator_time":2.3
@@ -283,7 +316,7 @@
     ],
     "Gradient Update":[
         {
-            "id":44,
+            "id":45,
             "type":0,
             "Description": "Gradient Update",
             "Operator_time":49

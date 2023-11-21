@@ -83,7 +83,7 @@ Layer name: language_model.encoder.layers.0.mlp.dense_4h_to_h.bias, Layer size: 
 ```
 
 - (3) Attention LayerNorm的权重+偏置： [hidden-size] + [hidden-size] = [1792] + [1792] = 2×h
-- (4) Attention QKV线性层权重：[hidden-size×3 / T, hidden-size] = [2688, 1792] = 3×h×h / T 
+- (4) Attention QKV线性层权重（将QKV进行线性变换）：[hidden-size×3 / T, hidden-size] = [2688, 1792] = 3×h×h / T 
 - (5) Attention QKV线性层偏置：[hidden-size×3 / T] = [2688] = 3×h / T
 - (6) Attention 线性层输出结果权重：[hidden-size, hidden-size / T] = [1792, 896] = h×h / T
 - (7) Attention 线性层输出结果偏置：[hidden-size] = [1792] = h
