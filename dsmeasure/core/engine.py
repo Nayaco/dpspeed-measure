@@ -35,6 +35,9 @@ from torch.nn.parameter import Parameter
 from torch.optim.lr_scheduler import _LRScheduler
 
 from dsmeasure.core.abstract_operator import AbstractOperatorConfig, AbstractOperator
+from dsmeasure.core.device_manager import DeviceManager
+from dsmeasure.core.operator_manager import OperatorManager
+
 
 class CostEngine:
     def __init__(self):
@@ -57,14 +60,50 @@ class CostEngine:
         self.pcie_util_trace = []
         self.cuda_memory_trace = []
 
-    def evaluation(self, operators: list[tuple[int, AbstractOperator]]):
+    def evaluation(self, interval: int, operators: list[int]):
         """
         evaluation the operators
-            operators: list(tuple(int, AbstractOperator))
-                arrive time, operator
+            interval: us
+            operators: list(uid of AbstractOperator)
+                list of independent training pipeline
         """
+        op_manager = OperatorManager()
+        dev_manager = DeviceManager()
         self.reset()
-        
+        wait_queue: list[int] = []
+        ready_queue: list[int] = []
+        for op_uid in operators:
+            op_manager.operators[op_uid].reset()
+            ready_queue.append(op_uid)
+        while len(ready_queue) > 0 or len(wait_queue) > 0:
+            new_ready_queue: list[int] = []
+            for r_op_uid in ready_queue:
+                while op_manager.operators[ready_queue[0]].subop()._config.is_prime:
+                    r_op_uid = \
+                        op_manager.operators[ready_queue[0]].subop()._config.op_uid
+                ret = op_manager.operators[ready_queue[0]].apply()
+            
+                if ret[0] == True:
+                    if op_manager.operators[ready_queue[0]]._config.is_prime:
+                        for op in op_manager.operators[ready_queue[0]]._next:
+                            if op._prev_done == len(op._prev):
+                                wait_queue.append(op._config.op_uid)
+                    else:
+                else:
+                    new_ready_queue.append(ready_queue[r_op_uid])
+    
+            ready_queue = new_ready_queue
+            for d_uid in dev_manager.devices.keys():
+                dev_manager.devices[d_uid].run(interval)
+            for op in wait_queue:
+                if op._prev_done == len(op._prev):
+                    ready_queue.append(op)
+                    wait_queue.remove(op)
+            
+
+            
+
+            
 
 
         

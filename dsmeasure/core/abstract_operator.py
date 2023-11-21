@@ -60,19 +60,51 @@ class AbstractOperator:
     """
     def __init__(self, config: AbstractOperatorConfig):
         self._config = config
-        self._next = []
-        self._prev = []
+        # Prime Operator Only
+        self._next: list[AbstractOperator] = [] 
+        self._prev: list[AbstractOperator] = []
+        self._prev_done: int = int(0)
+        # Unprime Operator Only
+        self._subop: AbstractOperator = None
 
     def add_next(self, next_op):
+        """
+        only when the operator is prime, it can add next_op like that
+        should be override when operator is not prime
+        """
         self._next.append(next_op)
         next_op._prev.append(self)
+
+    def subop(self):
+        """
+        only when the operator is not prime, it can have subop, return the head of subops
+        """
+        return self._subop
     
-    """
-    *tensor_in: tensor shapes
-    return operator excution time and output tensor shape 
-    """
     @abstractmethod
     def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
+        """
+        *tensor_in: tensor shapes
+        return operator excution time and output tensor shape 
+        """    
+        pass
+
+    def reset(self) -> None:
+        self._prev_done = int(0)
+        if self._config.is_prime and len(self._next) > 0:
+            for op in self._next:
+                op.reset()
+        elif not self._config.is_prime and self._subop is not None:
+            self._subop.reset()
+
+    def default_apply_cb(self):
+        """
+        default callback function for apply
+        """
+        for op in self._next:
+            op._prev_done += 1
+
+    def apply(self) -> Tuple:
         pass
     
     def __repr__(self) -> str:

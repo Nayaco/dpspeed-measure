@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from dsmeasure.core.abstract_device import AbstractDeviceConfig
-from dsmeasure.core.device_manager import GetDeviceManager
+from dsmeasure.core.device_manager import DeviceManager
 
 from dsmeasure.device.pcie4 import DevicePCIEConfig
 from dsmeasure.device.gpu import DeviceCUDAConfig
@@ -23,8 +23,8 @@ class Server2U_1Side:
     def __init__(self, 
                  pcie_config_numa0: DevicePCIEConfig, 
                  cuda_config_cuda0: DeviceCUDAConfig) -> None:
-        self.pcie_numa0,_ = GetDeviceManager().register(pcie_config_numa0)
-        self.cuda_numa0,_ = GetDeviceManager().register(cuda_config_cuda0)
+        self.pcie_numa0,_ = DeviceManager().register(pcie_config_numa0)
+        self.cuda_numa0,_ = DeviceManager().register(cuda_config_cuda0)
 
 class Server2U_2Side:
     """

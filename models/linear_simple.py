@@ -44,16 +44,16 @@ class Linear2Layer(AbstractOperator):
             op_name="matul",
         ), 100, torch.Tensor([1,2,3]))
 
-        self.matul_1_backward = OpStaticComputational(OperatorComputationalConfig(
-            op_uid=3,
-            op_name="matul_backward",
-        ), 100, torch.Tensor([1,2,3]))
-        self.matul_2_backward = OpStaticComputational(OperatorComputationalConfig(
-            op_uid=4,
-            op_name="matul_backward",
-        ), 100, torch.Tensor([1,2,3]))
+        # self.matul_1_backward = OpStaticComputational(OperatorComputationalConfig(
+        #     op_uid=3,
+        #     op_name="matul_backward",
+        # ), 100, torch.Tensor([1,2,3]))
+        # self.matul_2_backward = OpStaticComputational(OperatorComputationalConfig(
+        #     op_uid=4,
+        #     op_name="matul_backward",
+        # ), 100, torch.Tensor([1,2,3]))
         self.matul_1.add_next(self.matul_2)
-        self.add_next(self.matul_1)
+        self._subop = self.matul_1
     
     def estimate(self, *tensor_in: torch.Tensor):
         pass

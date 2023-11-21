@@ -51,7 +51,7 @@ class DeviceCUDA(AbstractDevice):
         """
         if kwargs['computational'] == True:
             if self.computational_job_run == True:
-                return False
+                return False, None, None
             memory_cost = kwargs['memory']
             self.memory_used += int(memory_cost)
             self.computational_job = (run_time, memory_cost, callback)

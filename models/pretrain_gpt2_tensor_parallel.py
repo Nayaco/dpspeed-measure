@@ -32,21 +32,73 @@ import torch.nn as nn
 from dsmeasure.core.abstract_operator import AbstractOperatorConfig, AbstractOperator
 from dsmeasure.common_operators.op_common import OpStaticComputational, OpStaticNonComputational
 from dsmeasure.common_operators.op_config import OperatorComputationalConfig, OperatorNonComputationalConfig, OperatorCustomConfig
+from dsmeasure.device.gpu import DeviceCUDAConfig, DeviceCUDA
 
-from dsmeasure.core.device_manager import GetDeviceManager
+from dsmeasure.core.device_manager import DeviceManager
+
+class CudaMelloc(OpStaticComputational):
+    def __init__(self, config: OperatorComputationalConfig, alloc_memory: int):
+        """
+        config: OperatorComputationalConfig
+        alloc_memory: int
+        """
+        super().__init__(config)
+        self.estimate_runtime: int = int(0)
+        self.alloc_memory = alloc_memory
+
+    def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
+        return super().estimate(*tensor_in)
+
+    def apply(self):
+        cuda: DeviceCUDA = DeviceManager().find_by_name('cuda:0')
+        return cuda.occupy(self.estimate_runtime, self.default_apply_cb, \
+                           memory=self.alloc_memory, computational=False)
 
 class Embedding(OpStaticComputational):
+    def __init__(self, config: OperatorComputationalConfig):
+        super().__init__(config)
+        self.estimate_runtime: int = int(4000)
+
+    def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
+        return super().estimate(*tensor_in)
+    
+    def apply(self):
+        cuda: DeviceCUDA = DeviceManager().find_by_name('cuda:0')
+        return cuda.occupy(self.estimate_runtime, None, memory=0, computational=True)
+    
+class Linear(OpStaticComputational):
+    def __init__(self, config: OperatorComputationalConfig):
+        super().__init__(config)
+        self.estimate_runtime: int = int(700)
+
+    def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
+        return super().estimate(*tensor_in)
+    
+    def apply(self):
+        cuda: DeviceCUDA = DeviceManager().find_by_name('cuda:0')
+        return cuda.occupy(self.estimate_runtime, None, memory=0, computational=True)
+
+class LayerNorm(OpStaticComputational):
     def __init__(self, config: OperatorComputationalConfig):
         super().__init__(config)
 
     def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
         return super().estimate(*tensor_in)
     
-class Linear(OpStaticComputational):
+    def apply(self):
+        cuda: DeviceCUDA = DeviceManager().find_by_name('cuda:0')
+        cuda.occupy(self.estimate_runtime, None, memory=0, computational=True)
+
+class SelfAttention(OpStaticComputational):
     def __init__(self, config: OperatorComputationalConfig):
         super().__init__(config)
 
     def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
         return super().estimate(*tensor_in)
+    
+class SelfAttention(OpStaticComputational):
+    def __init__(self, config: OperatorComputationalConfig):
+        super().__init__(config)
 
-class LayerNorm(OpStaticComputational):
+    def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
+        return super().estimate(*tensor_in)

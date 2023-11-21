@@ -29,9 +29,11 @@ import torch.nn as nn
 
 from dsmeasure.core.abstract_operator import AbstractOperatorConfig, AbstractOperator
 from dsmeasure.common_operators.op_common import OpStaticComputational, OpStaticNonComputational
-from dsmeasure.common_operators.op_config import OperatorComputationalConfig, OperatorNonComputationalConfig, OperatorCustom
-
+from dsmeasure.common_operators.op_config import OperatorComputationalConfig, OperatorNonComputationalConfig, OperatorCustomConfig
+from dsmeasure.core.operator_manager import OperatorManager
 from models import linear_simple
 
-ls_ = linear_simple.Linear2Layer(OperatorCustom(op_uid=0, op_name="linear_simple"))
-print(ls_)
+ls_ = linear_simple.Linear2Layer(OperatorCustomConfig(op_uid=0, op_name="linear_simple"))
+_oid, _op = OperatorManager().register(ls_)
+print(_oid)
+print(OperatorManager().find(_oid))
