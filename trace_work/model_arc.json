@@ -1,19 +1,23 @@
 {
-    "Model Arc":"GPT-2, 1.3B model, TP=2, 2 GPU",
+    "Model Arc":"GPT-2, 1.3B model, TP=2, 2 GPU, Operator_time:ms, Activation Size:MB;",
     "Forward head Operator":[
         {
             "id":0,
             "type":0,
             "Description": "Embedding Opration (First Layer)",
-            "Operator_time":4
+            "Operator_time":4,
+            "Model Size":89.7,
+            "Model Tensor":"[25216, 1792]+[1024, 1792]，词典大小+位置Embedding",
         },
         {
             "id":1,
             "type":0,
             "Description": "FusedLayerNormAffineFunction",
             "Operator_time":0.067,
-            "Size":28,
-            "Size function":"2sbh"
+            "Activation Size":28,
+            "Activation Size function":"2sbh",
+            "Model Size":0.007,
+            "Model Tensor":"LayerNorm的权重+偏置 [1792]+[1792]",
         }
     ],
     "Forward body Operator - recursive":[
@@ -22,8 +26,10 @@
             "type":0,
             "Description": "QKV_Linear",
             "Operator_time":0.49,
-            "Size":42,
-            "Size function":"6sbh/T"
+            "Activation Size":42,
+            "Activation Size function":"6sbh/T",
+            "Model Size":9.2,
+            "Model Tensor":"QKV线性层权重（将QKV进行线性变换）+偏置，[2688, 1792]+[2688]",
         },
         {
             "id":3,
@@ -36,32 +42,34 @@
             "type":0,
             "Description": "Softmax",
             "Operator_time":0.163,
-            "size":128,
-            "Size function":"2bass/T"
+            "Activation Size":128,
+            "Activation Size function":"2bass/T"
         },
         {
             "id":5,
             "type":0,
             "Description": "Dropout",
             "Operator_time":0.286,
-            "size":192,
-            "Size function":"bass/T+2bass/T"
+            "Activation Size":192,
+            "Activation Size function":"bass/T+2bass/T"
         },
         {
             "id":6,
             "type":0,
             "Description": "Self-Attention-Q*K*V",
             "Operator_time":0.191,
-            "size":14,
-            "Size function":"2sbh/T"
+            "Activation Size":14,
+            "Activation Size function":"2sbh/T"
         },
         {
             "id":7,
             "type":0,
             "Description": "Attention_Linear",
             "Operator_time":0.146,
-            //"size":28,
-            //"Size function":"2sbh"
+            //"Activation Size":28,
+            //"Activation Size function":"2sbh",
+            "Model Size":3.06,
+            "Model Tensor":"线性层输出结果权重+偏置，[1792, 896]+[1792]",
 
         },
         {
@@ -75,16 +83,18 @@
             "type":0,
             "Description": "Attention_Dropout",
             "Operator_time":0.14,
-            "size":42,
-            "Size function":"sbh+2sbh"
+            "Activation Size":42,
+            "Activation Size function":"sbh+2sbh"
         },
         {
             "id":10,
             "type":0,
             "Description": "FusedLayerNormAffineFunction",
             "Operator_time":0.067,
-            "size":28,
-            "Size function":"2sbh"
+            "Activation Size":28,
+            "Activation Size function":"2sbh",
+            "Model Size":0.007,
+            "Model Tensor":"LayerNorm的权重+偏置，[1792] + [1792]",
         },
         {
             "id":11,
@@ -97,24 +107,28 @@
             "type":0,
             "Description": "MLP_Linear_1",
             "Operator_time":0.512,
-            "size":56,
-            "Size function":"8sbh/T"
+            "Activation Size":56,
+            "Activation Size function":"8sbh/T",
+            "Model Size":12.26,
+            "Model Tensor":"h_to_4h线性层权重+偏置，[3584, 1792]+[3584]",
         },
         {
             "id":13,
             "type":0,
             "Description": "GeLU_1",
             "Operator_time":0.428,
-            "size":56,
-            "Size function":"8sbh/T"
+            "Activation Size":56,
+            "Activation Size function":"8sbh/T"
         },
         {
             "id":14,
             "type":0,
             "Description": "MLP_Linear_2",
             "Operator_time":0.483,
-            //"size":28,
-            //"Size function":"2sbh"
+            //"Activation Size":28,
+            //"Activation Size function":"2sbh",
+            "Model Size":12.25,
+            "Model Tensor":"4h_to_h线性层权重+偏置，[1792, 3584]+[1792]",
         },
         {
             "id":15,
@@ -133,16 +147,18 @@
             "type":0,
             "Description": "Dropout",
             "Operator_time":0.075,
-            "size":42,
-            "Size function":"sbh+2sbh"
+            "Activation Size":42,
+            "Activation Size function":"sbh+2sbh"
         },
         {
             "id":18,
             "type":0,
             "Description": "FusedLayerNormAffineFunction",
             "Operator_time":0.067,
-            "Size":28,
-            "Size function":"2sbh"
+            "Activation Size":28,
+            "Activation Size function":"2sbh",
+            "Model Size":0.007,
+            "Model Tensor":"LayerNorm的权重+偏置，[1792] + [1792]"
         }
     ],
 
