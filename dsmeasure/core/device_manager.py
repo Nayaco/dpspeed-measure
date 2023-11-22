@@ -56,6 +56,7 @@ class DeviceManager:
             return self.devices[self.cuda[dname]]
         if dname.find('pcie') != -1:
             return self.devices[self.pcie[dname]]
+        return None
 
     def find(self, device_uid: int) -> AbstractDevice:
         """

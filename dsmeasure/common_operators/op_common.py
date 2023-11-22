@@ -145,10 +145,10 @@ class OpStaticComputational(AbstractOperator):
     static computational : 
         *tensor_baseline: [Tensor(any)]
     """
-    def __init__(self, config: OperatorComputationalConfig, time_baseline: int, *tensor_baseline: torch.Tensor):
+    def __init__(self, config: OperatorComputationalConfig):
         super().__init__(config)
-        self.time_baseline = time_baseline
-        self.scale_baseline = tensor_baseline[0]
+        # self.time_baseline = time_baseline
+        # self.scale_baseline = None tensor_baseline[0]
     
     def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
         """
@@ -158,17 +158,17 @@ class OpStaticComputational(AbstractOperator):
             run_time
             tensor_shape
         """
-        return self.time_baseline, self.scale_baseline
+        return 0, None # self.time_baseline, self.scale_baseline
     
 class OpStaticNonComputational(AbstractOperator):
     """
     static non computational : 
         *tensor_baseline: [Tensor(any)]
     """
-    def __init__(self, config: OperatorNonComputationalConfig, time_baseline: int, *tensor_baseline: torch.Tensor):
+    def __init__(self, config: OperatorNonComputationalConfig):
         super().__init__(config)
-        self.time_baseline = time_baseline
-        self.scale_baseline = tensor_baseline[0]
+        # self.time_baseline = time_baseline
+        # self.scale_baseline = tensor_baseline[0]
     
     def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
         """
@@ -178,6 +178,6 @@ class OpStaticNonComputational(AbstractOperator):
             run_time
             tensor_shape
         """
-        return self.time_baseline, self.scale_baseline
+        return 0, None # self.time_baseline, self.scale_baseline
 
 

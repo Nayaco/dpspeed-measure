@@ -31,9 +31,22 @@ from dsmeasure.core.abstract_operator import AbstractOperatorConfig, AbstractOpe
 from dsmeasure.common_operators.op_common import OpStaticComputational, OpStaticNonComputational
 from dsmeasure.common_operators.op_config import OperatorComputationalConfig, OperatorNonComputationalConfig, OperatorCustomConfig
 from dsmeasure.core.operator_manager import OperatorManager
+from dsmeasure.core.device_manager import DeviceManager
+from dsmeasure.device.gpu import DeviceCUDAConfig
 from models import linear_simple
+from models import layer2linear
 
-ls_ = linear_simple.Linear2Layer(OperatorCustomConfig(op_uid=0, op_name="linear_simple"))
-_oid, _op = OperatorManager().register(ls_)
-print(_oid)
-print(OperatorManager().find(_oid))
+from dsmeasure.core.engine import CostEngine
+
+# ls_ = linear_simple.Linear2Layer(OperatorCustomConfig(op_uid=0, op_name="linear_simple"))
+# _oid, _op = OperatorManager().register(ls_)
+# print(_oid)
+# print(OperatorManager().find(_oid))
+
+layer = layer2linear.Linear2Network(OperatorCustomConfig(op_uid=0, op_name="layer2linear"))
+OperatorManager().register(layer)
+print(layer)
+
+DeviceManager().register(DeviceCUDAConfig(memory_max_capacity=1000, memory_limit_capacity=1000))
+
+CostEngine().evaluation(10, [layer._config.op_uid])

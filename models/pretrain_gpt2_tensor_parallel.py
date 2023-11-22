@@ -67,16 +67,19 @@ class Embedding(OpStaticComputational):
         return cuda.occupy(self.estimate_runtime, None, memory=0, computational=True)
     
 class Linear(OpStaticComputational):
-    def __init__(self, config: OperatorComputationalConfig):
+    def __init__(self, config: OperatorComputationalConfig, compute_time: int):
         super().__init__(config)
-        self.estimate_runtime: int = int(700)
+        self.estimate_runtime: int = compute_time
 
     def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
         return super().estimate(*tensor_in)
     
     def apply(self):
         cuda: DeviceCUDA = DeviceManager().find_by_name('cuda:0')
-        return cuda.occupy(self.estimate_runtime, None, memory=0, computational=True)
+        if cuda is None:
+            raise Exception("device not found")
+        return cuda.occupy(self.estimate_runtime, self.default_apply_cb, \
+                           memory=0, computational=True)
 
 class LayerNorm(OpStaticComputational):
     def __init__(self, config: OperatorComputationalConfig):

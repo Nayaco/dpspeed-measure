@@ -38,7 +38,9 @@ from dsmeasure.core.abstract_operator import AbstractOperatorConfig, AbstractOpe
 from dsmeasure.core.device_manager import DeviceManager
 from dsmeasure.core.operator_manager import OperatorManager
 
+from functools import cache
 
+@cache
 class CostEngine:
     def __init__(self):
         self.max_cuda_memory = 0
@@ -70,35 +72,45 @@ class CostEngine:
         op_manager = OperatorManager()
         dev_manager = DeviceManager()
         self.reset()
+
         wait_queue: list[int] = []
         ready_queue: list[int] = []
         for op_uid in operators:
             op_manager.operators[op_uid].reset()
             ready_queue.append(op_uid)
         while len(ready_queue) > 0 or len(wait_queue) > 0:
+            # check if task in ready queue is can be executed
             new_ready_queue: list[int] = []
             for r_op_uid in ready_queue:
-                while op_manager.operators[ready_queue[0]].subop()._config.is_prime:
+                while not op_manager.operators[r_op_uid]._config.is_prime:
                     r_op_uid = \
-                        op_manager.operators[ready_queue[0]].subop()._config.op_uid
-                ret = op_manager.operators[ready_queue[0]].apply()
-            
+                        op_manager.operators[r_op_uid].subop()._config.op_uid
+                ret = op_manager.operators[r_op_uid].apply()
+                
                 if ret[0] == True:
-                    if op_manager.operators[ready_queue[0]]._config.is_prime:
-                        for op in op_manager.operators[ready_queue[0]]._next:
-                            if op._prev_done == len(op._prev):
-                                wait_queue.append(op._config.op_uid)
-                    else:
+                    for n_op in op_manager.operators[r_op_uid]._next:
+                        if n_op._config.op_uid not in wait_queue:
+                            wait_queue.append(n_op._config.op_uid)
                 else:
-                    new_ready_queue.append(ready_queue[r_op_uid])
-    
+                    new_ready_queue.append(r_op_uid)
             ready_queue = new_ready_queue
+            # execution
             for d_uid in dev_manager.devices.keys():
                 dev_manager.devices[d_uid].run(interval)
-            for op in wait_queue:
-                if op._prev_done == len(op._prev):
-                    ready_queue.append(op)
-                    wait_queue.remove(op)
+
+            # profile
+            self.current_cuda_memory = dev_manager.find_by_name('cuda:0').memory_used
+            self.cuda_memory_trace.append(self.current_cuda_memory)
+            self.max_cuda_memory = max(self.max_cuda_memory, self.current_cuda_memory)
+
+            # check if task in wait queue can be inserted into ready queue
+            new_wait_queue: list[int] = []
+            for w_op_uid in wait_queue:
+                if op_manager.operators[w_op_uid]._prev_done == len(op_manager.operators[w_op_uid]._prev):
+                    ready_queue.append(w_op_uid)
+                else:
+                    new_wait_queue.append(w_op_uid)
+            wait_queue = new_wait_queue
             
 
             
