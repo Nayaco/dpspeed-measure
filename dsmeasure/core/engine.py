@@ -87,7 +87,7 @@ class CostEngine:
                         op_manager.operators[r_op_uid].subop()._config.op_uid
                 ret = op_manager.operators[r_op_uid].apply()
                 
-                if ret[0] == True:
+                if ret == True:
                     for n_op in op_manager.operators[r_op_uid]._next:
                         if n_op._config.op_uid not in wait_queue:
                             wait_queue.append(n_op._config.op_uid)

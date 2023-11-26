@@ -39,7 +39,7 @@ CudaMalloc_InitModel(0us, 100MB)
 -> 
 CudaMalloc_Linear1(10us, 10MB) 
 ->
-CudaMalloc_Linear2(10us, 10MB) | Linear1(700us, 0MB)
+CudaMalloc_Linear2(10us, 10MB) | Linear1(70us, 0MB)
 ->
 Linear2(700us, 0MB)
 ->

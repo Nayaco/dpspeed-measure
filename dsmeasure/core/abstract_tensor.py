@@ -35,45 +35,28 @@ from torch.nn.parameter import Parameter
 from torch.optim.lr_scheduler import _LRScheduler
 
 from dataclasses import dataclass
-from typing import Callable, Any
-from abc import abstractmethod, ABC
+from typing import Callable, Tuple
+from abc import abstractmethod
 
-@dataclass
-class AbstractDeviceConfig:
+
+class AbstractTensor:
     """
-    basic device config, inlcude:
-        device uid
-        device name
+    Define the tensors for Graph G<V,E>, where indicate whether the memory should be free
+    size: int
     """
-    device_uid: int = 0
-    device_name: str = None
+    def __init__(self, size: int):
+        self.size: int = size
+        self.denpend_count: int = 0
+        self.denpend_done: int = 0
 
-    is_computational: bool = False
-    is_transferatble: bool = False
+    def reset(self):
+        self.denpend_done = 0
 
-    def __post_init__(self):
-        pass
+    def required(self):
+        self.denpend_count += 1
+    
+    def done(self):
+        self.denpend_done += 1
 
-class AbstractDevice(ABC):
-    """
-    device interface, inlcude:
-        occupy
-        run
-        sync
-    """
-    def __init__(self) -> None:
-        pass
-    
-    @abstractmethod
-    def occupy(self, run_time: int, callback: Callable[..., Any] | None, **kwargs):
-        pass
-    
-    @abstractmethod
-    def try_occupy(self, run_time: int, **kwargs):
-        pass
-
-    @abstractmethod
-    def run(self, interval: int):
-        pass
-    
-    
+    def no_required(self):
+        return self.denpend_done == self.denpend_count

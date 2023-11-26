@@ -36,7 +36,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 from dataclasses import dataclass
 from typing import Callable, Tuple
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 
 @dataclass
 class AbstractOperatorConfig:
@@ -52,7 +52,7 @@ class AbstractOperatorConfig:
     def __post_init__(self):
         pass
 
-class AbstractOperator:
+class AbstractOperator(ABC):
     """
     Define the operators as Graph G<V,E> where V are operators, E define 
     dependency between contiguous operator excutions. Sibling operations
@@ -81,7 +81,6 @@ class AbstractOperator:
         """
         return self._subop
     
-    @abstractmethod
     def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
         """
         *tensor_in: tensor shapes

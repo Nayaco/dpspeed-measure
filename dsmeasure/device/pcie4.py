@@ -35,7 +35,7 @@ class DevicePCIE4(AbstractDevice):
         self.tranfer_job_run = False
         self.tranfer_job: tuple = None
         
-    def occupy(self, run_time: int, callback: Callable[..., Any], **kwargs):
+    def occupy(self, run_time: int, callback: Callable[..., Any], **kwargs) -> bool:
         """
         occupy pcie4():
             run_time: time to run estimated of job (-1 means calculate automatically)
@@ -47,7 +47,7 @@ class DevicePCIE4(AbstractDevice):
         if self.tranfer_job_run == True:
             return False
         self.transfer_job = (
-            run_time if run_time > 0 else \
+            run_time if run_time is not None and run_time > 0 else \
                 math.ceil(kwargs['dsize'] / self.config.pcie_bandwidth_p2p + self.config.pcie_latency_p2p), 
             callback)
         self.transfer_job_run = True
@@ -67,4 +67,6 @@ class DevicePCIE4(AbstractDevice):
                 self.transfer_job_run = False
                 if self.tranfer_job[1] is not None:
                     self.tranfer_job[1]()
-        return
+    
+    def try_occupy(self, run_time: int, **kwargs):
+        return not self.tranfer_job_run

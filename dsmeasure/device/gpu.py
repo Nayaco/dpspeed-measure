@@ -35,7 +35,7 @@ class DeviceCUDA(AbstractDevice):
         self.computational_job: tuple = None
         self.non_computational_queue: list[tuple] = []
     
-    def occupy(self, run_time: int, callback: Callable[..., Any], **kwargs):
+    def occupy(self, run_time: int, callback: Callable[..., Any], **kwargs) -> bool:
         """
         occupy gpu(computational/non-computational jobs):
             run_time: time to run estimated of job
@@ -44,14 +44,12 @@ class DeviceCUDA(AbstractDevice):
             computational: if job is computational, computational jobs will exclusive
                 other computational jobs, memory will release automatically; if job is non-computational, they will done
                 simultaneously, and memory won't release automatically.
-        return: (bool, int, int)
+        return: (bool,)
             is_success
-            memory_used
-            memory_available(base on limited memory)
         """
         if kwargs['computational'] == True:
             if self.computational_job_run == True:
-                return False, None, None
+                return False
             memory_cost = kwargs['memory']
             self.memory_used += int(memory_cost)
             self.computational_job = (run_time, memory_cost, callback)
@@ -64,8 +62,30 @@ class DeviceCUDA(AbstractDevice):
         assert self.memory_used <= self.config.memory_max_capacity, \
             "Error: CUDA Out-Of-Memory, expect {expect} MB, capacity is {capacity} MB".format(
                 expect=self.memory_used, capacity=self.config.memory_max_capacity)
+        return True
 
-        return True, self.memory_used, self.config.memory_limit_capacity - self.memory_used
+    def try_occupy(self, run_time: int, **kwargs):
+        """
+        try occupy gpu(computational/non-computational jobs):
+            run_time: time to run estimated of job
+            memory: memory cost estimated of job
+            computational: if job is computational, computational jobs will exclusive
+                other computational jobs, memory will release automatically; if job is non-computational, they will done
+                simultaneously, and memory won't release automatically.
+        return: (bool,)
+            is_success
+        """
+        if kwargs['computational'] == True:
+            if self.computational_job_run == True:
+                return False
+            memory_cost = kwargs['memory']
+        else:
+            memory_cost = kwargs['memory']
+            self.memory_used += int(memory_cost)
+            self.non_computational_queue.append((run_time, memory_cost, callback))
+            
+        return True
+
     
     def run(self, interval: int):
         """
@@ -97,5 +117,3 @@ class DeviceCUDA(AbstractDevice):
             elif self.non_computational_queue[i] is not None:
                 self.non_computational_queue[i][2]()
         self.non_computational_queue = _non_computational_queue_new
-
-        return self.memory_used, self.config.memory_limit_capacity - self.memory_used
