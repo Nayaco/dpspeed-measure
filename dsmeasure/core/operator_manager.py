@@ -38,7 +38,7 @@ class OperatorManager:
             self.op_count += 1
             
             if new_op_queue[0]._config.is_prime:
-                new_op_queue.extend(new_op_queue[0]._next)
+                new_op_queue.extend([_op for _op in new_op_queue[0]._next if _op._config.op_uid < 64])
             else:
                 new_op_queue.append(new_op_queue[0].subop())
             new_op_queue.pop(0)

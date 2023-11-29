@@ -92,21 +92,72 @@ class AllReduceLayer(OpStaticComputational):
                 pcie.occupy(self.estimate_runtime, self.default_apply_cb, \
                             dsize=0)
 
-class Add(OpStaticComputational):
-    def __init__(self, config: OperatorComputationalConfig, compute_time: int):
+class AddLayer(AbstractOperator):
+    def __init__(self, 
+                 config: OperatorCustomConfig, 
+                 compute_time: int, 
+                 output_size: int):
         super().__init__(config)
-        self.estimate_runtime: int = compute_time
+        # output tensor
+        self.output_malloc = CudaMalloc(OperatorNonComputationalConfig(
+            op_name="output_malloc"), output_size)
+        # computation
+        self.addlayer = CommonComputational(OperatorComputationalConfig(
+            op_name="add"), compute_time)
+        # free output tensor
+        self.output_free = CudaMalloc(OperatorNonComputationalConfig(
+            op_name="output_free"), -output_size)
+        # Init-Weight -> Output-Malloc -> Add -> Output-Free
+        self.output_malloc.add_next(self.addlayer)
+        self.addlayer.add_next(self.output_free)
 
-    def estimate(self, *tensor_in: Tensor) -> Tuple[int, Tensor]:
-        return super().estimate(*tensor_in)
+        self._subop = self.output_malloc
 
-    def apply(self):
-        cuda: DeviceCUDA = DeviceManager().find_by_name('cuda:0')
+    def add_next(self, next_op):
+        self.addlayer.add_next(next_op)
+    
+    def add_next_bf_output_free(self, next_op):
+        """
+        append output tensor free operator to next_op
+        """
+        next_op.add_next(self.output_free)
 
-        if cuda is None:
-            raise Exception("device not found")
-        return  cuda.occupy(self.estimate_runtime, self.default_apply_cb, \
-                            memory=0, computational=True)
+class AddLayerBackward(AbstractOperator):
+    def __init__(self, 
+                 config: OperatorCustomConfig, 
+                 compute_time: int, 
+                 grad_in_size: int):
+        super().__init__(config)
+        # grad in tensor
+        self.grad_in_malloc = CudaMalloc(OperatorNonComputationalConfig(
+            op_name="grad_in_malloc"), grad_in_size) # 16 bit grad_in
+        # backward computation
+        self.add_backward = \
+            CommonComputational(OperatorComputationalConfig(
+                op_name="add_backward"), compute_time)
+        # free grad in tensor
+        self.grad_in_free = CudaMalloc(OperatorNonComputationalConfig(
+            op_name="grad_in_free_a"), -grad_in_size)
+        # Grad-In-Malloc -> Add-Backward -> Grad-In-Free
+        self.grad_in_malloc.add_next(self.add_backward)
+        self.add_backward.add_next(self.grad_in_free)
+
+        self._subop = self.grad_in_malloc
+
+    def add_next(self, next_op):
+        raise Exception("AddLayerBackward.add_next() is not supported, use add_next_a() and add_next_b() instead")
+
+    def add_next_a(self, next_op):
+        self.add_backward.add_next(next_op)
+    
+    def add_next_b(self, next_op):
+        self.add_backward.add_next(next_op)
+
+    def add_next_bf_gradin_free(self, next_op):
+        """
+        append grad in tensor free operator to next_op
+        """
+        next_op.add_next(self.grad_in_free)
 
 class LinearLayerAdam(AbstractOperator):
     def __init__(self, 
@@ -279,7 +330,7 @@ class MatMulLayer(AbstractOperator):
         # free output tensor
         self.output_free = CudaMalloc(OperatorNonComputationalConfig(
             op_name="output_free"), -output_size)
-        # Init-Weight -> Output-Malloc -> Linear-Matmul-Bias -> Output-Free
+        # Init-Weight -> Output-Malloc -> Matmul -> Output-Free
         self.output_malloc.add_next(self.matmul)
         self.matmul.add_next(self.output_free)
 
@@ -310,9 +361,9 @@ class MatMulLayerBackward(AbstractOperator):
                 op_name="matmul_backward"), compute_time)
         # free grad in tensor
         self.grad_in_free_a = CudaMalloc(OperatorNonComputationalConfig(
-            op_name="grad_in_free_a"), grad_in_size_a)
+            op_name="grad_in_free_a"), -grad_in_size_a)
         self.grad_in_free_b = CudaMalloc(OperatorNonComputationalConfig(
-            op_name="grad_in_free_b"), grad_in_size_b)
+            op_name="grad_in_free_b"), -grad_in_size_b)
         # Grad-In-Malloc -> Matmul-Backward -> Grad-In-Free
         self.grad_in_malloc.add_next(self.matmul_backward)
         self.matmul_backward.add_next(self.grad_in_free_a)
@@ -456,7 +507,7 @@ class CoreAttentionTPRowParallel(AbstractOperator):
             op_name="attention_linear_qkv"),
             compute_time_linear_qkv,
             precision * int(3 * batch_size*seq_len*head_num*head_hidden_size / tensor_parallel),
-            precision * int(3 * (head_num*head_hidden_size) ** 2))
+            precision * int(3 * (head_num*head_hidden_size) ** 2) /  tensor_parallel)
         self.linear_qkv_backward = LinearLayerBackwardAdam(OperatorCustomConfig(
             op_name="attention_linear_qkv_backward"),
             compute_time_linear_qkv_backward,
@@ -574,6 +625,10 @@ class CoreAttentionTPRowParallel(AbstractOperator):
 
         self._subop = self.linear_qkv
 
+        self.init_weight = [self.linear_qkv.init_weight, 
+                            self.attention_linear.init_weight]
+
+
     def add_next(self, next_op):
         self.output_dropout.add_next(next_op)
 
@@ -616,7 +671,7 @@ class LayerNormLayer(AbstractOperator):
         """
         next_op.add_next(self.output_free)
 
-class LayerNormLayer(AbstractOperator):
+class LayerNormLayerBackward(AbstractOperator):
     def __init__(self, config: OperatorCustomConfig, 
                  compute_time: int, 
                  grad_in_size: int):
@@ -808,6 +863,8 @@ class FeedForwardLayerGPT(AbstractOperator):
         self.ffn_gelu_backward.add_next_bf_gradin_free(self.ffn_linear_1_backward)
 
         self._subop = self.ffn_linear_1
+        self.init_weight = [self.ffn_linear_1.init_weight,
+                            self.ffn_linear_2.init_weight] 
 
     def add_next(self, next_op):
         self.ffn_dropout.add_next(next_op)
@@ -828,27 +885,27 @@ class EmbeddingLayer(AbstractOperator):
                  output_size: int, 
                  weight_size: int):
         super().__init__(config)
-        # W and b and parameter grad 16 bit
+        # Embedding
         self.init_weight = CudaMalloc(OperatorNonComputationalConfig(
-            op_name="init_weight"), weight_size*2)
+            op_name="init_weight"), weight_size)
         # output tensor
         self.output_malloc = CudaMalloc(OperatorNonComputationalConfig(
             op_name="output_malloc"), output_size)
         # computation
-        self.linear_matmul_bias = CommonComputational(OperatorComputationalConfig(
-            op_name="linear_matmul_bias"), compute_time)
+        self.embedding = CommonComputational(OperatorComputationalConfig(
+            op_name="embedding"), compute_time)
         # free output tensor
         self.output_free = CudaMalloc(OperatorNonComputationalConfig(
             op_name="output_free"), -output_size)
-        # Init-Weight -> Output-Malloc -> Linear-Matmul-Bias -> Output-Free
+        # Init-Weight -> Output-Malloc -> Embedding -> Output-Free
         self.init_weight.add_next(self.output_malloc)
-        self.output_malloc.add_next(self.linear_matmul_bias)
-        self.linear_matmul_bias.add_next(self.output_free)
+        self.output_malloc.add_next(self.embedding)
+        self.embedding.add_next(self.output_free)
 
         self._subop = self.output_malloc
 
     def add_next(self, next_op):
-        self.linear_matmul_bias.add_next(next_op)
+        self.embedding.add_next(next_op)
         
     def add_next_bf_output_free(self, next_op):
         """
@@ -856,32 +913,381 @@ class EmbeddingLayer(AbstractOperator):
         """
         next_op.add_next(self.output_free)
 
-class LinearLayerBackwardAdam(AbstractOperator):
+class EmbeddingLayerBackwardAdam(AbstractOperator):
     def __init__(self, config: OperatorCustomConfig, 
                  compute_time: int, 
                  grad_in_size: int):
         super().__init__(config)
         # grad in tensor
-        self.grad_in_malloc = CudaMalloc(OperatorNonComputationalConfig(
-            op_name="grad_in_malloc"), grad_in_size) # 16 bit grad_in
+        # self.grad_in_malloc = CudaMalloc(OperatorNonComputationalConfig(
+        #     op_name="grad_in_malloc"), grad_in_size) # 16 bit grad_in
         # backward computation
-        self.linear_matmul_bias_backward = \
+        self.embedding_backward = \
             CommonComputational(OperatorComputationalConfig(
-                op_name="linear_matmul_bias_backward"), compute_time)
+                op_name="embedding_backward"), compute_time)
         # free grad in tensor
-        self.grad_in_free = CudaMalloc(OperatorNonComputationalConfig(
-            op_name="grad_in_free"), -grad_in_size)
-        # Grad-In-Malloc -> Linear-Matmul-Bias-Backward -> Grad-In-Free
-        self.grad_in_malloc.add_next(self.linear_matmul_bias_backward)
-        self.linear_matmul_bias_backward.add_next(self.grad_in_free)
+        # self.grad_in_free = CudaMalloc(OperatorNonComputationalConfig(
+        #     op_name="grad_in_free"), -grad_in_size)
+        # Grad-In-Malloc -> Embedding-Backward -> Grad-In-Free
+        # self.grad_in_malloc.add_next(self.embedding_backward)
+        self.embedding_backward.add_next(self.grad_in_free)
 
-        self._subop = self.grad_in_malloc
+        self._subop = self.embedding_backward
 
     def add_next(self, next_op):
-        self.linear_matmul_bias_backward.add_next(next_op)
+        self.embedding_backward.add_next(next_op)
 
     def add_next_bf_gradin_free(self, next_op):
         """
         append grad in tensor free operator to next_op
         """
-        next_op.add_next(self.grad_in_free)
+        # next_op.add_next(self.grad_in_free)
+        pass
+
+class TransformerBlockGPT(AbstractOperator):
+    def __init__(self, 
+                 config: OperatorCustomConfig,
+
+                 compute_time_att_linear_qkv: int,
+                 compute_time_att_matmul_kq: int, 
+                 compute_time_att_sm: int,
+                 compute_time_att_attention_dropout: int,
+                 compute_time_att_matmul_v: int,
+                 compute_time_att_linear: int,
+                 compute_time_att_allreduce: int,
+                 compute_time_att_dropout: int,
+
+                 compute_time_att_linear_qkv_backward: int,
+                 compute_time_att_matmul_kq_backward: int,
+                 compute_time_att_sm_backward: int,
+                 compute_time_att_attention_dropout_backward: int,
+                 compute_time_att_matmul_v_backward: int,
+                 compute_time_att_linear_backward: int,
+                 compute_time_att_allreduce_backward: int,
+                 compute_time_att_dropout_backward: int,
+                 
+                 compute_time_ffn_layer1: int,
+                 compute_time_ffn_gelu : int,
+                 compute_time_ffn_layer2: int,
+                 compute_time_ffn_allreduce: int,
+                 compute_time_ffn_dropout: int,
+                 
+                 compute_time_ffn_layer1_backward: int,
+                 compute_time_ffn_gelu_backward : int,
+                 compute_time_ffn_layer2_backward: int,
+                 compute_time_ffn_allreduce_backward: int,
+                 compute_time_ffn_dropout_backward: int,
+
+                 compute_time_layernorm_1: int,
+                 compute_time_layernorm_2: int,
+                 compute_time_layernorm_1_backward: int,
+                 compute_time_layernorm_2_backward: int,
+                 
+                 compute_time_residual_add_1: int,
+                 compute_time_residual_add_2: int,
+                 compute_time_residual_add_1_backward: int,
+                 compute_time_residual_add_2_backward: int,
+
+                 batch_size: int,
+                 seq_len: int,
+                 head_num: int,
+                 head_hidden_size: int,
+                 hidden_size: int,
+
+                 tensor_parallel: int|None = None,
+                 precision: int = 2):
+        super().__init__(config)
+        tensor_parallel = 1 if tensor_parallel is None else tensor_parallel
+
+        self.layernorm_1 = LayerNormLayer(OperatorCustomConfig(
+            op_name="layernorm_1"),
+            compute_time_layernorm_1,
+            precision * int(batch_size*seq_len*hidden_size))
+        self.layernorm_1_backward = LayerNormLayerBackward(OperatorCustomConfig(
+            op_name="layernorm_1_backward"),
+            compute_time_layernorm_1_backward,
+            precision * int(batch_size*seq_len*hidden_size))
+
+        self.core_attention = CoreAttentionTPRowParallel(OperatorCustomConfig(
+            op_name="core_attention"),
+            compute_time_att_linear_qkv,
+            compute_time_att_matmul_kq, 
+            compute_time_att_sm,
+            compute_time_att_attention_dropout,
+            compute_time_att_matmul_v,
+            compute_time_att_linear,
+            compute_time_att_allreduce,
+            compute_time_att_dropout,
+
+            compute_time_att_linear_qkv_backward,
+            compute_time_att_matmul_kq_backward,
+            compute_time_att_sm_backward,
+            compute_time_att_attention_dropout_backward,
+            compute_time_att_matmul_v_backward,
+            compute_time_att_linear_backward,
+            compute_time_att_allreduce_backward,
+            compute_time_att_dropout_backward,
+
+            batch_size,
+            seq_len,
+            head_num,
+            head_hidden_size,
+            tensor_parallel,
+            precision)
+
+        self.residual_add_1 = AddLayer(OperatorCustomConfig(
+            op_name="residual_add_1"),
+            compute_time_residual_add_1,
+            precision * int(batch_size*seq_len*hidden_size))
+        self.residual_add_1_backward = AddLayerBackward(OperatorCustomConfig(
+            op_name="residual_add_1_backward"),
+            compute_time_residual_add_1_backward,
+            precision * int(batch_size*seq_len*hidden_size))
+        
+        self.layernorm_2 = LayerNormLayer(OperatorCustomConfig(
+            op_name="layernorm_2"),
+            compute_time_layernorm_2,
+            precision * int(batch_size*seq_len*hidden_size))
+        self.layernorm_2_backward = LayerNormLayerBackward(OperatorCustomConfig(
+            op_name="layernorm_2_backward"),
+            compute_time_layernorm_2_backward,
+            precision * int(batch_size*seq_len*hidden_size))
+        
+        self.ffn_layer = FeedForwardLayerGPT(OperatorCustomConfig(
+            op_name="ffn_layer"),
+            compute_time_ffn_layer1,
+            compute_time_ffn_gelu,
+            compute_time_ffn_layer2,
+            compute_time_ffn_allreduce,
+            compute_time_ffn_dropout,
+            
+            compute_time_ffn_layer1_backward,
+            compute_time_ffn_gelu_backward,
+            compute_time_ffn_layer2_backward,
+            compute_time_ffn_allreduce_backward,
+            compute_time_ffn_dropout_backward,
+            
+            batch_size,
+            seq_len,
+            hidden_size,
+            tensor_parallel,
+            precision)
+
+        self.residual_add_2 = AddLayer(OperatorCustomConfig(
+            op_name="residual_add_2"),
+            compute_time_residual_add_2,
+            precision * int(batch_size*seq_len*hidden_size))
+        self.residual_add_2_backward = AddLayerBackward(OperatorCustomConfig(
+            op_name="residual_add_2_backward"),
+            compute_time_residual_add_2_backward,
+            precision * int(batch_size*seq_len*hidden_size))
+        
+        # layernorm_1 -> core_attention -> residual_add_1 -> 
+        # layernorm_2 -> ffn_layer -> residual_add_2
+        self.layernorm_1.add_next(self.core_attention)
+        self.core_attention.add_next(self.residual_add_1)
+        self.residual_add_1.add_next(self.layernorm_2)
+        self.layernorm_2.add_next(self.ffn_layer)
+        self.ffn_layer.add_next(self.residual_add_2)
+        # MIDLE FORWARD AND BACKWARD
+        self.residual_add_2.add_next(self.residual_add_2_backward)
+        # last layer of ffn
+        self.residual_add_2_backward.add_next_a(self.ffn_layer.ffn_dropout_backward)
+        self.residual_add_2_backward.add_next_b(self.residual_add_1_backward)
+        self.ffn_layer.add_next_backward(self.layernorm_2_backward)
+        self.layernorm_2_backward.add_next(self.residual_add_1_backward)
+        # last layer of core attention
+        self.residual_add_1_backward.add_next_a(self.core_attention.output_dropout_backward)
+        self.core_attention.add_next_backward(self.layernorm_1_backward)
+
+        # layernorm_1 output should be free after core attention linear qkv backward
+        self.layernorm_1.add_next_bf_output_free(self.core_attention.linear_qkv_backward)
+        # residual_add_1 output
+        self.residual_add_1.add_next_bf_output_free(self.layernorm_2_backward)
+        # layernorm_2 output should be free after ffn linear 1 backward
+        self.layernorm_2.add_next_bf_output_free(self.ffn_layer.ffn_linear_1_backward)
+        
+        # residual_add_2 backward
+        self.residual_add_2_backward.add_next_bf_gradin_free(self.ffn_layer.ffn_dropout_backward)
+        self.residual_add_2_backward.add_next_bf_gradin_free(self.residual_add_1_backward)
+        # ffn_layer backward
+        self.ffn_layer.add_next_bf_gradin_free(self.layernorm_2_backward)
+        # layernorm_2 backward
+        self.layernorm_2_backward.add_next_bf_gradin_free(self.residual_add_1_backward)
+        # residual_add_1 backward
+        self.residual_add_1_backward.add_next_bf_gradin_free(self.core_attention.output_dropout_backward)
+        # core_attention backward
+        self.core_attention.add_next_bf_gradin_free(self.layernorm_1_backward)
+        
+        self._subop = self.layernorm_1
+        self.init_weight = [*self.core_attention.init_weight,
+                            *self.ffn_layer.init_weight]
+        
+    def add_next(self, next_op):
+        self.residual_add_2.add_next(next_op)
+    
+    def add_next_backward(self, next_backward_op):
+        self.layernorm_1_backward.add_next(next_backward_op)
+        self.residual_add_2_backward.add_next_b(next_backward_op)
+    
+    def add_next_bf_output_free(self, next_op):
+        """
+        append output tensor free operator to next_op
+        """
+        self.residual_add_2.add_next_bf_output_free(next_op)
+
+    def add_next_bf_gradin_free(self, next_op):
+        """
+        append grad in tensor free operator to next_op
+        """
+        self.layernorm_1_backward.add_next_bf_gradin_free(next_op)
+        self.residual_add_1_backward.add_next_bf_gradin_free(next_op)
+
+class GPT2Model(AbstractOperator):
+    def __init__(self, 
+                 config: OperatorCustomConfig,
+                 compute_time_embedding: int,
+                 compute_time_embedding_backward: int,
+                 
+                 compute_time_att_linear_qkv: int,
+                 compute_time_att_matmul_kq: int, 
+                 compute_time_att_sm: int,
+                 compute_time_att_attention_dropout: int,
+                 compute_time_att_matmul_v: int,
+                 compute_time_att_linear: int,
+                 compute_time_att_allreduce: int,
+                 compute_time_att_dropout: int,
+
+                 compute_time_att_linear_qkv_backward: int,
+                 compute_time_att_matmul_kq_backward: int,
+                 compute_time_att_sm_backward: int,
+                 compute_time_att_attention_dropout_backward: int,
+                 compute_time_att_matmul_v_backward: int,
+                 compute_time_att_linear_backward: int,
+                 compute_time_att_allreduce_backward: int,
+                 compute_time_att_dropout_backward: int,
+                 
+                 compute_time_ffn_layer1: int,
+                 compute_time_ffn_gelu : int,
+                 compute_time_ffn_layer2: int,
+                 compute_time_ffn_allreduce: int,
+                 compute_time_ffn_dropout: int,
+                 
+                 compute_time_ffn_layer1_backward: int,
+                 compute_time_ffn_gelu_backward : int,
+                 compute_time_ffn_layer2_backward: int,
+                 compute_time_ffn_allreduce_backward: int,
+                 compute_time_ffn_dropout_backward: int,
+
+                 compute_time_layernorm_1: int,
+                 compute_time_layernorm_2: int,
+                 compute_time_layernorm_1_backward: int,
+                 compute_time_layernorm_2_backward: int,
+                 
+                 compute_time_residual_add_1: int,
+                 compute_time_residual_add_2: int,
+                 compute_time_residual_add_1_backward: int,
+                 compute_time_residual_add_2_backward: int,
+                 
+                 compute_time_layernorm_final: int,
+                 compute_time_layernorm_final_backward: int,
+
+                 batch_size: int,
+                 seq_len: int,
+                 head_num: int,
+                 head_hidden_size: int,
+                 hidden_size: int,
+                 vocab_size: int,
+                 tensor_parallel: int|None = None,
+                 precision: int = 2,
+                 transformer_layers: int = 1):
+        super().__init__(config)
+        self.transformer_layers = transformer_layers
+
+        tensor_parallel = 1 if tensor_parallel is None else tensor_parallel
+        self.embedding = EmbeddingLayer(OperatorCustomConfig(
+            op_name="embedding"),
+            compute_time_embedding,
+            precision * int(batch_size*seq_len*hidden_size),
+            precision * int(vocab_size*hidden_size))
+        self.embedding_backward = EmbeddingLayerBackwardAdam(OperatorCustomConfig(
+            op_name="embedding_backward"),
+            compute_time_embedding_backward,
+            precision * int(batch_size*seq_len*hidden_size))
+        
+        self.transformer_blocks = [TransformerBlockGPT(OperatorCustomConfig(
+            op_name="transformer_block_%d" % i),
+            compute_time_att_linear_qkv,
+            compute_time_att_matmul_kq, 
+            compute_time_att_sm,
+            compute_time_att_attention_dropout,
+            compute_time_att_matmul_v,
+            compute_time_att_linear,
+            compute_time_att_allreduce,
+            compute_time_att_dropout,
+
+            compute_time_att_linear_qkv_backward,
+            compute_time_att_matmul_kq_backward,
+            compute_time_att_sm_backward,
+            compute_time_att_attention_dropout_backward,
+            compute_time_att_matmul_v_backward,
+            compute_time_att_linear_backward,
+            compute_time_att_allreduce_backward,
+            compute_time_att_dropout_backward,
+
+            compute_time_ffn_layer1,
+            compute_time_ffn_gelu,
+            compute_time_ffn_layer2,
+            compute_time_ffn_allreduce,
+            compute_time_ffn_dropout,
+            
+            compute_time_ffn_layer1_backward,
+            compute_time_ffn_gelu_backward,
+            compute_time_ffn_layer2_backward,
+            compute_time_ffn_allreduce_backward,
+            compute_time_ffn_dropout_backward,
+
+            compute_time_layernorm_1,
+            compute_time_layernorm_2,
+            compute_time_layernorm_1_backward,
+            compute_time_layernorm_2_backward,
+            
+            compute_time_residual_add_1,
+            compute_time_residual_add_2,
+            compute_time_residual_add_1_backward,
+            compute_time_residual_add_2_backward,
+
+            batch_size,
+            seq_len,
+            head_num,
+            head_hidden_size,
+            hidden_size,
+
+            tensor_parallel,
+            precision) for i in range(transformer_layers)]
+        
+        self.layernorm_final = LayerNormLayer(OperatorCustomConfig(
+            op_name="layernorm_final"),
+            compute_time_layernorm_final,
+            precision * int(batch_size*seq_len*hidden_size))
+        
+        self.layernorm_final_backward = LayerNormLayerBackward(OperatorCustomConfig(
+            op_name="layernorm_final_backward"),
+            compute_time_layernorm_final_backward,
+            precision * int(batch_size*seq_len*hidden_size))
+        
+        self.embedding.add_next(self.transformer_blocks[0])
+        self.transformer_blocks[0].add_next_backward(self.embedding_backward)
+        self.transformer_blocks[0].add_next_bf_gradin_free(self.embedding_backward)
+        for i in range(transformer_layers - 1):
+            self.transformer_blocks[i].add_next(self.transformer_blocks[i + 1])
+            self.transformer_blocks[i + 1].add_next_backward(self.transformer_blocks[i])
+            self.transformer_blocks[i].add_next_bf_output_free(self.transformer_blocks[i + 1].layernorm_1_backward)
+            self.transformer_blocks[i + 1].add_next_bf_gradin_free(self.transformer_blocks[i].residual_add_2_backward)
+        self.transformer_blocks[-1].add_next(self.layernorm_final)
+        self.transformer_blocks[-1].add_next_bf_output_free(self.layernorm_final_backward)
+        self.layernorm_final_backward.add_next(self.transformer_blocks[-1].residual_add_2_backward)
+        self.layernorm_final_backward.add_next_bf_gradin_free(self.transformer_blocks[-1].residual_add_2_backward)
+        
+        self.layernorm_final.add_next(self.layernorm_final_backward)
+        self.layernorm_final.add_next_bf_output_free(self.layernorm_final_backward)

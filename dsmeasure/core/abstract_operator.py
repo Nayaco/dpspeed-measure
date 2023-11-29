@@ -92,7 +92,8 @@ class AbstractOperator(ABC):
         self._prev_done = int(0)
         if self._config.is_prime and len(self._next) > 0:
             for op in self._next:
-                op.reset()
+                if op._prev_done != 0:
+                    op.reset()
         elif not self._config.is_prime and self._subop is not None:
             self._subop.reset()
 

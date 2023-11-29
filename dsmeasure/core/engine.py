@@ -62,13 +62,14 @@ class CostEngine:
         self.pcie_util_trace = []
         self.cuda_memory_trace = []
 
-    def evaluation(self, interval: int, operators: list[int]):
+    def evaluation(self, interval: int, operators: list[int], time_limit: int = None):
         """
         evaluation the operators
             interval: us
             operators: list(uid of AbstractOperator)
                 list of independent training pipeline
         """
+        time_limit = time_limit if time_limit is not None else 1e10
         op_manager = OperatorManager()
         dev_manager = DeviceManager()
         self.reset()
@@ -78,7 +79,7 @@ class CostEngine:
         for op_uid in operators:
             op_manager.operators[op_uid].reset()
             ready_queue.append(op_uid)
-        while len(ready_queue) > 0 or len(wait_queue) > 0:
+        while (len(ready_queue) > 0 or len(wait_queue) > 0) and time_limit > 0:
             # check if task in ready queue is can be executed
             new_ready_queue: list[int] = []
             for r_op_uid in ready_queue:
@@ -86,8 +87,9 @@ class CostEngine:
                     r_op_uid = \
                         op_manager.operators[r_op_uid].subop()._config.op_uid
                 ret = op_manager.operators[r_op_uid].apply()
-                
+
                 if ret == True:
+                    print(op_manager.operators[r_op_uid])
                     for n_op in op_manager.operators[r_op_uid]._next:
                         if n_op._config.op_uid not in wait_queue:
                             wait_queue.append(n_op._config.op_uid)
@@ -105,6 +107,7 @@ class CostEngine:
 
             # check if task in wait queue can be inserted into ready queue
             new_wait_queue: list[int] = []
+            # print([str(op_manager.operators[w_op_uid]) for w_op_uid in wait_queue])
             for w_op_uid in wait_queue:
                 if op_manager.operators[w_op_uid]._prev_done == len(op_manager.operators[w_op_uid]._prev):
                     ready_queue.append(w_op_uid)
@@ -112,10 +115,3 @@ class CostEngine:
                     new_wait_queue.append(w_op_uid)
             wait_queue = new_wait_queue
             
-
-            
-
-            
-
-
-        
