@@ -56,10 +56,7 @@ class AbstractDeviceConfig:
 
 class AbstractDevice(ABC):
     """
-    device interface, inlcude:
-        try_occupy
-        occupy
-        run
+    device interface, inlcude: try_occupy(), occupy(), run()
     """
     def __init__(self) -> None:
         pass
@@ -67,11 +64,12 @@ class AbstractDevice(ABC):
     @abstractmethod
     def occupy(self, run_time: int, callback: Callable[..., Any] | None, **kwargs):
         pass
-    
     @abstractmethod
     def try_occupy(self, run_time: int, **kwargs):
         pass
-
     @abstractmethod
     def run(self, interval: int):
+        pass
+    @abstractmethod
+    def is_idle(self):
         pass

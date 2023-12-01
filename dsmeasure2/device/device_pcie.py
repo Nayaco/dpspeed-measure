@@ -30,14 +30,13 @@ class DevicePCIE4(AbstractDevice):
     """
     def __init__(self, config: DevicePCIEConfig) -> None:
         super().__init__()
-        self.config = config
+        self.config: DevicePCIEConfig = config
 
         self.tranfer_job_run = False
         self.tranfer_job: tuple = None
         
     def occupy(self, run_time: int, callback: Callable[..., Any], **kwargs) -> bool:
-        """
-        occupy pcie4():
+        """ occupy pcie4():
             run_time: time to run estimated of job (-1 means calculate automatically)
             callback: callback after job done, call automatically after job finishes
             dsize: data size to transfer(if run_time is -1)
@@ -54,7 +53,7 @@ class DevicePCIE4(AbstractDevice):
         return True
     
     def run(self, interval: int) -> None:
-        """
+        """ run pcie4():
         interval:
         return: ()
         """
@@ -69,4 +68,7 @@ class DevicePCIE4(AbstractDevice):
                     self.tranfer_job[1]()
     
     def try_occupy(self, run_time: int, **kwargs):
+        return not self.tranfer_job_run
+
+    def is_idle(self):
         return not self.tranfer_job_run

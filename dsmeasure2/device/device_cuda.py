@@ -28,7 +28,7 @@ class DeviceCUDA(AbstractDevice):
     """
     def __init__(self, config: DeviceCUDAConfig) -> None:
         super().__init__()
-        self.config = config
+        self.config: DeviceCUDAConfig = config
 
         self.memory_used: int = int(0)
         self.computational_job_run = False
@@ -36,8 +36,7 @@ class DeviceCUDA(AbstractDevice):
         self.non_computational_queue: list[tuple] = []
     
     def occupy(self, run_time: int, callback: Callable[..., Any], **kwargs) -> bool:
-        """
-        occupy gpu(computational/non-computational jobs):
+        """ occupy gpu(computational/non-computational jobs):
             run_time: time to run estimated of job
             callback: callback after job done, call automatically after job finishes
             memory: memory cost estimated of job
@@ -65,30 +64,19 @@ class DeviceCUDA(AbstractDevice):
         return True
 
     def try_occupy(self, run_time: int, **kwargs):
-        """
-        try occupy gpu(computational/non-computational jobs):
-            run_time: time to run estimated of job
-            memory: memory cost estimated of job
-            computational: if job is computational, computational jobs will exclusive
-                other computational jobs, memory will release automatically; if job is non-computational, they will done
-                simultaneously, and memory won't release automatically.
+        """ try occupy gpu(computational/non-computational jobs):
+        run_time: time to run estimated of job
+        memory: memory cost estimated of job
+        computational: if job is computational, computational jobs will exclusive
+            other computational jobs, memory will release automatically; if job is non-computational, they will done
+            simultaneously, and memory won't release automatically.
         return: (bool,)
             is_success
         """
-        if kwargs['computational'] == True:
-            if self.computational_job_run == True:
-                return False
-            memory_cost = kwargs['memory']
-        else:
-            memory_cost = kwargs['memory']
-            self.memory_used += int(memory_cost)
-            self.non_computational_queue.append((run_time, memory_cost, callback))
-            
-        return True
-
+        return not(kwargs['computational'] and self.computational_job_run)
     
     def run(self, interval: int):
-        """
+        """ run gpu(computational/non-computational jobs):
         interval:
         return: (int, int)
             memory_used
@@ -110,10 +98,13 @@ class DeviceCUDA(AbstractDevice):
         for i in range(len(self.non_computational_queue)):
             self.non_computational_queue[i] = \
                 (self.non_computational_queue[i][0] - interval, 
-                 self.non_computational_queue[i][1], 
+                 self.non_computational_queue[i][1],
                  self.non_computational_queue[i][2])
             if self.non_computational_queue[i][0] > 0:
                 _non_computational_queue_new.append(self.non_computational_queue[i])
-            elif self.non_computational_queue[i] is not None:
+            elif self.non_computational_queue[i][2] is not None:
                 self.non_computational_queue[i][2]()
         self.non_computational_queue = _non_computational_queue_new
+        
+    def is_idle(self):
+        return self.computational_job_run == False and len(self.non_computational_queue) == 0

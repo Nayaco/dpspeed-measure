@@ -49,14 +49,15 @@ class AbstractOperatorConfig:
     is_computational = False
     is_prime = False
 
-    def __post_init__(self):
-        pass
+    # computational_density: float = 0.0
+    # computational_latency: float = 0.0
 
 class AbstractOperator(ABC):
     """
     Define the operators as Graph G<V,E> where V are operators, E define 
     dependency between contiguous operator excutions. Sibling operations
     can be well paralleled.
+    Flatten the Graph G<V,E> to a list of operators T<op1, op2, ...>
     """
     def __init__(self, config: AbstractOperatorConfig):
         self._config = config
@@ -64,8 +65,6 @@ class AbstractOperator(ABC):
         self._next: list[AbstractOperator] = [] 
         self._prev: list[AbstractOperator] = []
         self._prev_done: int = int(0)
-        # Unprime Operator Only
-        self._subop: AbstractOperator = None
 
     def add_next(self, next_op):
         """
@@ -77,32 +76,18 @@ class AbstractOperator(ABC):
             next_op._prev.append(self)
         else:
             raise TypeError("AbstractOperator.add_next() accept next_op should be AbstractOperator")
-
-    def subop(self):
-        """
-        only when the operator is not prime, it can have subop, return the head of subops
-        """
-        return self._subop
     
-    def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
+    @abstractmethod
+    def estimate(self, *tensor_in: torch.Tensor) -> int:
         """
         *tensor_in: tensor shapes
-        return operator excution time and output tensor shape 
+        return operator excution time
         """    
         pass
-
+    
     def reset(self) -> None:
-        """
-        root_operator.reset() will reset the whole graph
-        """
         self._prev_done = int(0)
-        if self._config.is_prime and len(self._next) > 0:
-            for op in self._next:
-                if op._prev_done != 0:
-                    op.reset()
-        elif not self._config.is_prime and self._subop is not None:
-            self._subop.reset()
-
+        
     def default_apply_cb(self):
         """
         default callback function for apply
@@ -110,13 +95,8 @@ class AbstractOperator(ABC):
         for _op in self._next:
             _op._prev_done += 1
 
-    def default_available(self):
-        """
-        default available function for apply
-        """
-        return self._prev_done == len(self._prev)
-
-    def apply(self) -> Tuple:
+    @abstractmethod
+    def apply(self) -> bool:
         pass
     
     def __repr__(self) -> str:
@@ -130,7 +110,6 @@ class OperatorComputationalConfig(AbstractOperatorConfig):
     """
     """
     def __post_init__(self):
-        super().__post_init__()
         self.is_computational = True
         self.is_prime = True
   
@@ -139,7 +118,6 @@ class OperatorNonComputationalConfig(AbstractOperatorConfig):
     """
     """
     def __post_init__(self):
-        super().__post_init__()
         self.is_computational = False
         self.is_prime = True
 
@@ -148,10 +126,8 @@ class OperatorCustomConfig(AbstractOperatorConfig):
     """
     """
     def __post_init__(self):
-        super().__post_init__()
         self.is_computational = False
         self.is_prime = False
-
 
 class OpStaticComputational(AbstractOperator):
     """
@@ -160,15 +136,8 @@ class OpStaticComputational(AbstractOperator):
     def __init__(self, config: OperatorComputationalConfig):
         super().__init__(config)
     
-    def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
-        """
-        estimate operator
-            *tensor_in: [any]
-        return (int, Tensor(any))
-            run_time
-            tensor_shape
-        """
-        return 0, None 
+    def estimate(self, *tensor_in: torch.Tensor) -> int:
+        return 0
     
 class OpStaticNonComputational(AbstractOperator):
     """
@@ -177,12 +146,35 @@ class OpStaticNonComputational(AbstractOperator):
     def __init__(self, config: OperatorNonComputationalConfig):
         super().__init__(config)
     
-    def estimate(self, *tensor_in: torch.Tensor) -> Tuple[int, torch.Tensor]:
+    def estimate(self, *tensor_in: torch.Tensor) -> int:
+        return 0
+    
+class OpStaticDerivative(AbstractOperator):
+    """
+    static derivative operator : 
+    """
+    def __init__(self, config: OperatorCustomConfig):
+        super().__init__(config)
+        self._subop : list[AbstractOperator] = None
+    
+    def estimate(self, *tensor_in: torch.Tensor) -> int:
+        return 0
+
+    def apply(self) -> bool:
         """
-        estimate operator
-            *tensor_in: [any]
-        return (int, Tensor(any))
-            run_time
-            tensor_shape
+        apply operator
         """
-        return 0, None
+        assert self._subop is not None and len(self._subop) > 0, "OpStaticDerivative._subop is None"
+        return self._subop[0].apply()
+    
+    def reset(self) -> None:
+        super().reset()
+        if self._subop is not None:
+            for _op in self._subop:
+                _op.reset()
+        
+    def subop(self):
+        """
+        only when the operator is not prime, it can have subop, return the head of subops
+        """
+        return self._subop
