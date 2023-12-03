@@ -100,7 +100,7 @@ class AbstractOperator(ABC):
         pass
     
     def __repr__(self) -> str:
-        return "<operator-%3d, %s>" % (self._config.op_uid, '{0: <5}'.format(self._config.op_name or 'None'))
+        return "<operator-%d, %s>" % (self._config.op_uid, '{0: <5}'.format(self._config.op_name or 'None'))
     
     def __len__(self) -> int:
         return 0 if self._next is None else len(self._next)

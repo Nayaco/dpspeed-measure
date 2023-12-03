@@ -247,7 +247,7 @@ class TernaryOperator(OpStaticComputational):
         for _dev in _devices[1:]:
             if _dev.try_occupy(self.estimate_runtime) == False:
                 return False
-            
+        
         def _apply_cb():
             for i in range(len(self.output)):
                 self.output[i].materialize()
@@ -298,10 +298,10 @@ class TernaryOperator(OpStaticComputational):
 class InitiateOperator(OpStaticComputational):
     def __init__(self, config: OperatorComputationalConfig, callback: Callable[..., Any] = None):
         super().__init__(config)
-        self.estimate_runtime: int = 0
+        self.estimate_runtime: int = 1
         self.inputs: list[ActivationTensor] = []
         self.weight: list[WeightTensor] = []
-        self.device_name: str = ['cuda:0']
+        self.device_name: str = 'cuda:0'
         self.callback: Callable[..., Any] = callback
 
     def set_parameters(self,

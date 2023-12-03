@@ -93,12 +93,20 @@ class CostEngine:
                 #     r_op_uid = \
                 #         op_manager.operators[r_op_uid].subop()._config.op_uid
                 ret = op_manager.operators[r_op_uid].apply()
-
+                
                 if ret == True:
                     print(op_manager.operators[r_op_uid])
+                    rn_op_uid = r_op_uid
+                    while not op_manager.operators[rn_op_uid]._config.is_prime:
+                        rn_op_uid = op_manager.operators[rn_op_uid].subop()[0]._config.op_uid
+                        for n_op in op_manager.operators[rn_op_uid]._next:
+                            if n_op._config.op_uid not in wait_queue:
+                                wait_queue.append(n_op._config.op_uid)
+                    
                     for n_op in op_manager.operators[r_op_uid]._next:
                         if n_op._config.op_uid not in wait_queue:
                             wait_queue.append(n_op._config.op_uid)
+                    # print([(op_manager.operators[ii],len(op_manager.operators[ii]._prev)) for ii in wait_queue])
                 else:
                     new_ready_queue.append(r_op_uid)
             ready_queue = new_ready_queue
@@ -121,6 +129,8 @@ class CostEngine:
                 else:
                     new_wait_queue.append(w_op_uid)
             wait_queue = new_wait_queue
+
+            time_limit -= interval
 
 if __name__ == "__main__":
     DeviceManager().register(DeviceCUDAConfig(memory_max_capacity=40000, memory_limit_capacity=40000))

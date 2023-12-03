@@ -70,7 +70,10 @@ class AttentionTPCRParallel(OpStaticDerivative):
                        output_linear, 
                        fwd_allreduce, 
                        dropout]
-        
+    
+    def weights(self) -> list[WeightTensor]:
+        return [self._subop[0].weight, self._subop[5].weight]
+    
     def get_output(self):
         """
         output of last dropout layer
@@ -86,7 +89,7 @@ class AttentionTPCRParallelBackward(OpStaticDerivative):
                  attention_dropout_backward: TernaryOperator,
                  softmax_qk_backward: BinaryOperator,
                  matmul_qk_backward: TernaryOperator,
-                 linear_qkv_backward: BinaryOperator,
+                 linear_qkv_backward: TernaryOperator,
                  bwd_allreduce: UnaryOperator):
         super().__init__(config)
 
@@ -113,44 +116,47 @@ class AttentionTPCRParallelBackward(OpStaticDerivative):
         grad_in output of linear qkv backward layer
         """
         return self._subop[-2].output[0]
+    def set_grad_out_input(self, grad_out_input: ActivationTensor):
+        self._subop[0].input_c = grad_out_input
 
-def make_attention_tp(
-        input_x_tensor : ActivationTensor,
-        compute_time_linear_qkv: int,
-        compute_time_matmul_kq: int, 
-        compute_time_sm: int,
-        compute_time_attention_dropout: int,
-        compute_time_matmul_v: int,
-        compute_time_linear: int,
-        compute_time_dropout: int,
+def make_attn_tp(
+    input_x_tensor: ActivationTensor,
 
-        compute_time_linear_qkv_backward: int,
-        compute_time_matmul_kq_backward: int,
-        compute_time_sm_backward: int,
-        compute_time_attention_dropout_backward: int,
-        compute_time_matmul_v_backward: int,
-        compute_time_linear_backward: int,
-        compute_time_dropout_backward: int,
+    compute_time_linear_qkv: int,
+    compute_time_matmul_kq: int, 
+    compute_time_sm: int,
+    compute_time_attention_dropout: int,
+    compute_time_matmul_v: int,
+    compute_time_linear: int,
+    compute_time_dropout: int,
 
-        compute_time_allreduce: int,
+    compute_time_linear_qkv_backward: int,
+    compute_time_matmul_kq_backward: int,
+    compute_time_sm_backward: int,
+    compute_time_attention_dropout_backward: int,
+    compute_time_matmul_v_backward: int,
+    compute_time_linear_backward: int,
+    compute_time_dropout_backward: int,
 
-        batch_size: int,
-        seq_len: int,
-        head_num: int,
-        head_hidden_size: int,
-        tensor_parallel: int|None = None,
-        precision: int = 2):
-    
-    tensor_parallel = tensor_parallel if tensor_parallel is not None else 1
-    _bshn = batch_size*seq_len*head_num*head_hidden_size
-    _bssn = batch_size*head_num*seq_len*seq_len
+    compute_time_allreduce: int,
+
+    batch_size: int,
+    seq_len: int,
+    head_num: int,
+    head_hidden_size: int,
+    tensor_parallel: int|None = None,
+    precision: int = 2
+):
+    tensor_parallel = tensor_parallel or 1
+    _BShn = batch_size*seq_len*head_num*head_hidden_size
+    _BSSn = batch_size*head_num*seq_len*seq_len
     _mb = 1024 * 1024
     # Linear QKV    (output tp)
     linear_qkv = UnaryOperator(OperatorComputationalConfig(op_name="linear_qkv",))
     linear_qkv.estimate_runtime = compute_time_linear_qkv
     linear_qkv.input = input_x_tensor
     linear_qkv.output = [TensorManager().register(ActivationTensor(
-            tensor_size=int(precision*3*_bshn/_mb/tensor_parallel)))
+            tensor_size=int(precision*3*_BShn/_mb/tensor_parallel)))
         ]
     linear_qkv.weight = TensorManager().register(WeightTensor(
                 tensor_size=int(precision*3*(head_num*head_hidden_size)**2/_mb)))
@@ -159,20 +165,20 @@ def make_attention_tp(
     matmul_qk.estimate_runtime = compute_time_matmul_kq
     matmul_qk.input = linear_qkv.output[0] # QK is in the same tensor
     matmul_qk.output = [TensorManager().register(ActivationTensor(
-            tensor_size=int(precision*_bssn/_mb/tensor_parallel)))
+            tensor_size=int(precision*_BSSn/_mb/tensor_parallel)))
         ]
     # Softmax(*)    (output tp)
     softmax_qk, softmax_qk_backward = make_softmax(
             input_t=matmul_qk.output[0],
             output_t=TensorManager().register(ActivationTensor(
-                tensor_size=int(precision*_bssn/_mb/tensor_parallel))),
+                tensor_size=int(precision*_BSSn/_mb/tensor_parallel))),
             rt_fwd=compute_time_sm, rt_bwd=compute_time_sm_backward
         )
     # Dropout(*)    (output tp)
     attention_dropout, attention_dropout_backward = make_dropout(
             input_t=softmax_qk.output[0],
             output_t=TensorManager().register(ActivationTensor(
-                tensor_size=int(precision*_bssn/_mb/tensor_parallel))),
+                tensor_size=int(precision*_BSSn/_mb/tensor_parallel))),
             rt_fwd=compute_time_attention_dropout, 
             rt_bwd=compute_time_attention_dropout_backward
         )
@@ -182,13 +188,13 @@ def make_attention_tp(
     matmul_v.input_a = attention_dropout.output[0]
     matmul_v.input_b = linear_qkv.output[0]
     matmul_v.output = [TensorManager().register(ActivationTensor(
-            tensor_size=int(precision*_bshn/_mb/tensor_parallel)))
+            tensor_size=int(precision*_BShn/_mb/tensor_parallel)))
         ]
     # Linear(CoreAttention(*))
     output_linear, output_linear_backward = make_linear(
             input_t=matmul_v.output[0],
             output_t=TensorManager().register(ActivationTensor(
-                tensor_size=precision * int(_bshn/_mb))),
+                tensor_size=precision * int(_BShn/_mb))),
             weight_t=TensorManager().register(WeightTensor(
                 tensor_size=int(precision*(head_num*head_hidden_size)**2/_mb))),
             rt_fwd=compute_time_linear, 
@@ -203,15 +209,19 @@ def make_attention_tp(
     output_dropout = UnaryOperator(OperatorComputationalConfig(op_name="output_dropout",))
     output_dropout.estimate_runtime = compute_time_dropout
     output_dropout.input = output_linear.output[0]
-    output_dropout.output = [TensorManager().register(ActivationTensor(
-            tensor_size=int(precision*1.5*_bshn/_mb)))
+    output_dropout.output = [
+            TensorManager().register(ActivationTensor(
+                tensor_size=int(precision*_BShn/_mb))),
+            TensorManager().register(ActivationTensor(
+                tensor_size=int(precision*_BShn/_mb/2)))
         ]
     # Backward Output Dropout(*)
-    output_dropout_backward = BinaryOperator(OperatorComputationalConfig(op_name="output_dropout_backward",))
+    output_dropout_backward = TernaryOperator(OperatorComputationalConfig(op_name="output_dropout_backward",))
     output_dropout_backward.estimate_runtime = compute_time_dropout_backward
     output_dropout_backward.input_a = output_dropout.output[0]
+    output_dropout_backward.input_b = output_dropout.output[1]
     output_dropout_backward.output = [TensorManager().register(ActivationTensor(
-            tensor_size=int(precision*_bshn/_mb)))
+            tensor_size=int(precision*_BShn/_mb)))
         ]
     # Backward Linear(CoreAttention(*)) (output tp)
     output_linear_backward.input_b = output_dropout_backward.output[0]
@@ -223,12 +233,12 @@ def make_attention_tp(
     matmul_v_backward.input_b = linear_qkv.output[0]
     matmul_v_backward.output = [
             TensorManager().register(ActivationTensor(
-                tensor_size=int(precision*_bshn/_mb/tensor_parallel))),
+                tensor_size=int(precision*_BShn/_mb/tensor_parallel))),
             TensorManager().register(ActivationTensor(
-                tensor_size=int(precision*_bssn/_mb/tensor_parallel)))
+                tensor_size=int(precision*_BSSn/_mb/tensor_parallel)))
         ] # [0]: grad of v, [1]: grad of att_dropout output, 
     # Backward Dropout(*)           (output tp)
-    attention_dropout_backward.input_b = matmul_v_backward.output[1]
+    attention_dropout_backward.input_c = matmul_v_backward.output[1]
     # Backward Softmax(*)           (output tp)
     softmax_qk_backward.input_b = attention_dropout_backward.output[0]
     # Backward Q x K^T              (output tp)
@@ -237,7 +247,7 @@ def make_attention_tp(
     matmul_qk_backward.input_b = softmax_qk_backward.output[0]
     matmul_qk_backward.input_a = linear_qkv.output[0] # QK is in the same tensor
     matmul_qk_backward.output = [TensorManager().register(ActivationTensor(
-            tensor_size=int(precision*2*_bshn/_mb/tensor_parallel)))
+            tensor_size=int(precision*2*_BShn/_mb/tensor_parallel)))
         ] # so their gradient
     # Backward Linear QKV          (output tp)
     linear_qkv_backward = TernaryOperator(OperatorComputationalConfig(op_name="linear_qkv_backward",))
@@ -246,7 +256,7 @@ def make_attention_tp(
     linear_qkv_backward.input_c = matmul_qk_backward.output[0]
     linear_qkv_backward.input_a = input_x_tensor
     linear_qkv_backward.output = [TensorManager().register(ActivationTensor(
-            tensor_size=int(precision*_bshn/_mb)))
+            tensor_size=int(precision*_BShn/_mb)))
         ]
     # Backward Allreduce
     allreduce_backward = UnaryOperator(OperatorComputationalConfig(op_name="allreduce_backward",))

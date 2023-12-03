@@ -28,7 +28,7 @@ class OperatorManager:
         self.operators: dict[int, AbstractOperator] = {}
         self.op_count: int = 0
 
-    def register(self, _op: AbstractOperator) -> None:
+    def register(self, _op: AbstractOperator) -> AbstractOperator:
         """
         register operator:
         """
@@ -38,6 +38,7 @@ class OperatorManager:
         if isinstance(_op, OpStaticDerivative):
             for _subop in _op._subop:
                 self.register(_subop)
+        return self.operators[_op._config.op_uid]
         
     def find(self, operator_uid: int) -> AbstractOperator:
         """

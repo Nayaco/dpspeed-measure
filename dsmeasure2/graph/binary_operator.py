@@ -29,24 +29,18 @@ from dsmeasure2.graph.tensor_define import ActivationTensor, WeightTensor, Tenso
 from dsmeasure2.graph.operator_graph import UnaryOperator, BinaryOperator, TernaryOperator
 
 def make_add(input_t_a: AbstractTensor, input_t_b: AbstractTensor, output_t: AbstractTensor, 
-             rt_fwd: int = 0, rt_bwd: int = 0) -> tuple[BinaryOperator, UnaryOperator]:
+             rt_fwd: int = 0) -> tuple[BinaryOperator, None]:
     
     assert input_t_a.tensor_size == input_t_b.tensor_size, "Add: tensor size not match"
 
-    grad_in_t = TensorManager().register(ActivationTensor(tensor_size=input_t_a.tensor_size))
-    
     add_forward = BinaryOperator(OperatorComputationalConfig(op_name="add_forward",))
-    add_backward = UnaryOperator(OperatorComputationalConfig(op_name="add_backward",))
     
     add_forward.input_a = input_t_a
     add_forward.input_b = input_t_b
     add_forward.output = [output_t]
     add_forward.estimate_runtime = rt_fwd
-    
-    add_backward.output = [grad_in_t]
-    add_backward.input = output_t
 
-    return add_forward, add_backward
+    return add_forward, None
 
 def make_matmul(input_t_a: AbstractTensor, input_t_b: AbstractTensor, output_t: AbstractTensor, 
                 rt_fwd: int = 0, rt_bwd: int = 0) -> tuple[BinaryOperator, TernaryOperator]:
