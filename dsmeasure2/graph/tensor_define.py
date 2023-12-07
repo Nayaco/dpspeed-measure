@@ -46,8 +46,9 @@ class ActivationTensor(AbstractTensor):
     def destroy(self):
         self.state =  TensorState.DESTROYED
 
-    def clear_state(self):
+    def clear_state(self) -> int:
         self.state = TensorState.UNKNOWN
+        return self.tensor_size
         
     def initiate_state(self):
         self.state = TensorState.DESTROYED

@@ -93,11 +93,18 @@ gpt2 = make_gpt_2(
         tensor_parallel=1,
         precision=2,
 
-        transfomer_block_num=1
+        transfomer_block_num=2
     )
 for _op in gpt2:
         OperatorManager().register(_op)
 
-DeviceManager().register(DeviceCUDAConfig(memory_max_capacity=40000, memory_limit_capacity=40000))
-DeviceManager().register(DevicePCIEConfig())
-CostEngine().evaluation(50, [_op._config.op_uid for _op in gpt2])
+# DeviceManager().register(DeviceCUDAConfig(memory_max_capacity=40000, memory_limit_capacity=40000))
+# DeviceManager().register(DevicePCIEConfig())
+# CostEngine().evaluation(50, [_op._config.op_uid for _op in gpt2])
+
+from dsmeasure2.flatten.flatten import flatten, convert_graph_to_flatten_seq
+# seq2 = flatten([_op._config.op_uid for _op in gpt2], [0], False)
+seq2 = convert_graph_to_flatten_seq([_op._config.op_uid for _op in gpt2], [0])
+opm = OperatorManager()
+for _op in seq2:
+        print([opm.operators[_op]])

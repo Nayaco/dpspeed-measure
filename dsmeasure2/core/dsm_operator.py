@@ -61,7 +61,7 @@ class AbstractOperator(ABC):
     """
     def __init__(self, config: AbstractOperatorConfig):
         self._config = config
-        # Prime Operator Only
+        
         self._next: list[AbstractOperator] = [] 
         self._prev: list[AbstractOperator] = []
         self._prev_done: int = int(0)
