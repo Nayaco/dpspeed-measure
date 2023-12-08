@@ -24,12 +24,19 @@ from dsmeasure2.flatten.flatten_stream import FlattenStream, FlattenController, 
 @cache
 class FlattenEngine:
     def __init__(self):
-        self._cuda_mem_trace = []
+        self._cuda_mem_trace: list[int] = []
+        self._tensor_ref_cnt: dict = {}
+        self._interval_tot: int = 0
     
     def reset(self):
         self._cuda_mem_trace = []
+        self._tensor_ref_cnt = {}
+        self._interval_tot = 0
 
-    def evaluation(self, flat_streams: list[FlattenStream], interval: int = 10, devices: str = ['cuda:0', 'pcie:0']):
+    def evaluation(self, flat_streams: list[FlattenStream], 
+                   interval: int = 10, 
+                   devices: str = ['cuda:0', 'pcie:0'], 
+                   verbose: bool = False):
         self.reset()
         for _device in devices:
             DeviceManager().find_by_name(_device).reset()
@@ -37,7 +44,9 @@ class FlattenEngine:
             _flat_stream.reset()
         flat_streams[0]._activate = True
         _ready_queue = []
-        _flag = False
+        # tensor ref conunt to see if it's intermediate
+        self._tensor_ref_cnt = {}
+
         while False in [_flat_stream.finish for _flat_stream in flat_streams]:
             # Collect OPs that are ready to be executed
             for _flat_stream in flat_streams:
@@ -48,27 +57,32 @@ class FlattenEngine:
             #     print([_flat_stream._stream_cnt for _flat_stream in flat_streams])
             #     exit(0)
             # Execute OPs
+
             _ready_queue_new = []
-            _exec_control = [isinstance(_op, FlattenController) and not isinstance(_op, FlattenMerge) for _op in _ready_queue]
-            _exec_mask = _exec_control if True in _exec_control else [True] * len(_ready_queue)
+            # merge will stop the src stream until required dst stream is done 
+            # btw. merge control done will cost 1 interval
+            _exec_control = [isinstance(_op, FlattenController) and not isinstance(_op, FlattenMerge) \
+                                for _op in _ready_queue]
+            _exec_mask = _exec_control if True in _exec_control else [True]*len(_ready_queue)
+            
             for i, _op in enumerate(_ready_queue):
                 _ret = _op.apply() if _exec_mask[i] else False
-                if _ret == True:
+                # DEBUG
+                if _ret and verbose:
                     print(_op)
-                    # if _op._config.op_name == 'linear_qkv_branch_loadin':
-                    #     _flag = True
+                # intermediate tensor count
+                if _ret and isinstance(_op, FlattenOperator):
+                    for _input in _op._input:
+                        self._tensor_ref_cnt[_input.tensor_uid] = \
+                            [*self._tensor_ref_cnt[_input.tensor_uid], self._interval_tot] \
+                                if _input.tensor_uid in self._tensor_ref_cnt else [self._interval_tot]
+                
                 _ready_queue_new.append(_op) if not _ret else None
             _ready_queue = _ready_queue_new
             # Computation/Transfer Execution
             if not (True in _exec_control):
                 for _device in devices:
                     DeviceManager().find_by_name(_device).run(interval)
-            # Profiling
-            self._cuda_mem_trace.append(DeviceManager().find_by_name('cuda:0').memory_used)
-                
-
-
-            
-
-                
-            
+                self._interval_tot += 1
+                # Profiling
+                self._cuda_mem_trace.append(DeviceManager().find_by_name('cuda:0').memory_used)

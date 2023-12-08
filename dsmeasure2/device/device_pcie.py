@@ -16,7 +16,7 @@ class DevicePCIEConfig(AbstractDeviceConfig):
     pcie_bandwidth_source: AbstractDeviceConfig = None
     pcie_bandwidth_target: AbstractDeviceConfig = None
     
-    pcie_bandwidth_p2p: float = 28543 # MB/s
+    pcie_bandwidth_p2p: float = 23543 # MB/s
     pcie_latency_p2p: float = 0 # us
     
     def __post_init__(self):
@@ -47,7 +47,9 @@ class DevicePCIE4(AbstractDevice):
             return False
         self.transfer_job = (
             run_time if run_time is not None and run_time > 0 else \
-                math.ceil(kwargs['dsize'] / self.config.pcie_bandwidth_p2p + self.config.pcie_latency_p2p), 
+                math.floor(
+                    float(kwargs['dsize'])/float(self.config.pcie_bandwidth_p2p)*1_000_000.0+\
+                        float(self.config.pcie_latency_p2p)), 
             callback)
         self.transfer_job_run = True
         return True

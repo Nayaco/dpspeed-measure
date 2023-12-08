@@ -40,6 +40,11 @@ class FlattenOffload(OpStaticNonComputational):
         return super().estimate(*tensor_in)
     
     def apply(self) -> bool:
+        # if False in [_ts.state == TensorState.AVAILABLE for _ts in self._tensors]:
+        #     for _ts in self._tensors:
+        #         if _ts.state != TensorState.AVAILABLE:
+        #             print(_ts, _ts.state)
+        #     print(self)
         assert False not in [_ts.state == TensorState.AVAILABLE for _ts in self._tensors], \
             "at least 1 tensor not available"
         _device_computational: DeviceCUDA = DeviceManager().find_by_name(self._device_name[0])
@@ -129,6 +134,7 @@ def make_passive_offload(_main_stream: FlattenStream, _source_op_index: int, _of
     _offload_loadin_pause: FlattenPause = OperatorManager().register(
         FlattenPause(OperatorCustomConfig(
             op_name=_main_stream[_source_op_index]._config.op_name+'_offload_loadin_pause')) )
+    
     _offload_stream = FlattenStream(
         [_offload_op, _offload_loadin_pause, _loadin_op])
 
@@ -153,5 +159,3 @@ def make_passive_offload(_main_stream: FlattenStream, _source_op_index: int, _of
     _main_stream._flat_seq.insert(_target_op_index, _merge_op)
 
     return _offload_stream
-    
-    

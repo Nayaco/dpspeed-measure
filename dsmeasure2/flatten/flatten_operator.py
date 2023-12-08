@@ -25,7 +25,8 @@ from dsmeasure2.graph.tensor_define import ActivationTensor, WeightTensor, Tenso
 
 class FlattenOperator(OpStaticComputational):
     def __init__(self, 
-                 config: OperatorComputationalConfig, 
+                 config: OperatorComputationalConfig,
+                 checkpointing: bool = False, 
                  callback: Callable[..., Any] = None):
         super().__init__(config)
         self._estimate_runtime: int = 0
@@ -36,6 +37,7 @@ class FlattenOperator(OpStaticComputational):
         self._device_name: list[str] = ['cuda:0']
         self._callback: Callable[..., Any] = callback
         self._prev_done = self._next = self._prev = None
+        self._checkpointing = checkpointing
 
     def add_next(self, next_op):
         raise Exception("flatten operator does not support add_next")
@@ -58,8 +60,9 @@ class FlattenOperator(OpStaticComputational):
         def _apply_cb():
             for _output in self._output:
                 _output.materialize()
-            for _input in self._input:
-                _input.ref_count -= 1
+            if not self._checkpointing:
+                for _input in self._input:
+                    _input.ref_count -= 1
             mem_free = sum(
                 [_input.clear_state() for _input in self._input if _input.ref_count == 0])
             if mem_free:

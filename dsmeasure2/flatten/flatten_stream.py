@@ -45,6 +45,7 @@ class FlattenStream:
         self._activate = False
         self._idle = True
         self._reentrant = reentrant
+        self._pause = False
 
     @property
     def finish(self) -> bool:
@@ -52,7 +53,7 @@ class FlattenStream:
     
     @property
     def pause(self) -> bool:
-        return self._stream_cnt < len(self._flat_seq) and not self._activate
+        return self._stream_cnt < len(self._flat_seq) and not self._activate and self._pause
     
     def forward(self) -> FlattenInitiate|FlattenOperator|FlattenController|None:
         if not self._activate or \
@@ -63,6 +64,7 @@ class FlattenStream:
             self._activate = True
             self._stream_cnt += 1
         def _callback_pause():
+            self._pause = True
             self._stream_cnt += 1
             
         self._flat_seq[self._stream_cnt]._callback = \
@@ -95,6 +97,7 @@ class FlattenBranch(FlattenController):
     def apply(self) -> bool:
         for _to in self._flatten_stream_to:
             _to._activate = True
+            _to._pause = False 
         return super().apply()
     
 class FlattenMerge(FlattenController):
@@ -106,6 +109,7 @@ class FlattenMerge(FlattenController):
         self._flatten_stream_from: list[FlattenStream] = branch_src
 
     def apply(self) -> bool:
+        # print(self, False not in [_from.finish or _from.pause for _from in self._flatten_stream_from])
         return (False not in [_from.finish or _from.pause for _from in self._flatten_stream_from]) \
             and super().apply()
     
@@ -116,3 +120,10 @@ class FlattenPause(FlattenController):
 
     def apply(self) -> bool:
         return super().apply()
+
+def stream_synchronize(_main_stream: FlattenStream, _slave_streams: list[FlattenStream], _source_op_index: int):
+    _merge_op: FlattenMerge = OperatorManager().register(
+        FlattenMerge(OperatorCustomConfig(
+            op_name=_main_stream[_source_op_index]._config.op_name+'_sync_merge'),
+            _slave_streams) )
+    _main_stream._flat_seq.insert(_source_op_index+1, _merge_op)
