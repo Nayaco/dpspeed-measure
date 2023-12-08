@@ -32,8 +32,8 @@ class DevicePCIE4(AbstractDevice):
         super().__init__()
         self.config: DevicePCIEConfig = config
 
-        self.tranfer_job_run = False
-        self.tranfer_job: tuple = None
+        self.transfer_job_run = False
+        self.transfer_job: tuple = None
         
     def occupy(self, run_time: int, callback: Callable[..., Any], **kwargs) -> bool:
         """ occupy pcie4():
@@ -43,7 +43,7 @@ class DevicePCIE4(AbstractDevice):
         return: (bool,)
             is_success
         """
-        if self.tranfer_job_run == True:
+        if self.transfer_job_run == True:
             return False
         self.transfer_job = (
             run_time if run_time is not None and run_time > 0 else \
@@ -58,17 +58,21 @@ class DevicePCIE4(AbstractDevice):
         return: ()
         """
         # computational jobs
-        if self.tranfer_job_run == True:
-            self.tranfer_job = \
-                (self.tranfer_job[0] - interval, 
-                 self.tranfer_job[1])
-            if self.tranfer_job[0] <= 0:
+        if self.transfer_job_run == True:
+            self.transfer_job = \
+                (self.transfer_job[0] - interval, 
+                 self.transfer_job[1])
+            if self.transfer_job[0] <= 0:
                 self.transfer_job_run = False
-                if self.tranfer_job[1] is not None:
-                    self.tranfer_job[1]()
+                if self.transfer_job[1] is not None:
+                    self.transfer_job[1]()
     
     def try_occupy(self, run_time: int, **kwargs):
-        return not self.tranfer_job_run
+        return not self.transfer_job_run
 
     def is_idle(self):
-        return not self.tranfer_job_run
+        return not self.transfer_job_run
+
+    def reset(self):
+        self.transfer_job_run = False
+        self.transfer_job = None

@@ -2,3 +2,4 @@
 .DS_Store
 raw_data
 __pycache__
+result*.log

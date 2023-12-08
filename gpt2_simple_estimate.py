@@ -43,6 +43,12 @@ from dsmeasure2.graph.dsm2_transformer import make_ffn_gpt2, FeedForwardGPT2, Fe
                                               make_transformer_block, TransformerBlockGPT2, TransformerBlockGPT2Backward
 from dsmeasure2.graph.gpt2_sequence    import make_gpt_2
 from dsmeasure2.engine import CostEngine
+from dsmeasure2.flatten.flatten import flatten, convert_graph_to_flatten_seq
+from dsmeasure2.flatten.flatten_engine import FlattenEngine
+from dsmeasure2.flatten.flatten_stream import FlattenStream
+from dsmeasure2.flatten.flatten_operator import FlattenInitiate, FlattenOperator
+
+from dsmeasure2.flatten.flatten_offload import make_passive_offload
 
 gpt2 = make_gpt_2(
         compute_time_linear_qkv=490,
@@ -98,13 +104,29 @@ gpt2 = make_gpt_2(
 for _op in gpt2:
         OperatorManager().register(_op)
 
-# DeviceManager().register(DeviceCUDAConfig(memory_max_capacity=40000, memory_limit_capacity=40000))
-# DeviceManager().register(DevicePCIEConfig())
+DeviceManager().register(DeviceCUDAConfig(memory_max_capacity=40000, memory_limit_capacity=40000))
+DeviceManager().register(DevicePCIEConfig())
 # CostEngine().evaluation(50, [_op._config.op_uid for _op in gpt2])
 
-from dsmeasure2.flatten.flatten import flatten, convert_graph_to_flatten_seq
-# seq2 = flatten([_op._config.op_uid for _op in gpt2], [0], False)
+# 
+seq2 = flatten([_op._config.op_uid for _op in gpt2], [0], False)
 seq2 = convert_graph_to_flatten_seq([_op._config.op_uid for _op in gpt2], [0])
-opm = OperatorManager()
-for _op in seq2:
-        print([opm.operators[_op]])
+stream_0 = FlattenStream(seq2)
+
+# for _op in seq2:
+#         print([OperatorManager().find(_op)], 
+#               OperatorManager().find(_op)._input if isinstance(OperatorManager().find(_op), FlattenOperator) else None,
+#               OperatorManager().find(_op)._output if isinstance(OperatorManager().find(_op), FlattenOperator) else None)
+
+stream_offload_linear_qkv_148 = make_passive_offload(stream_0, 2, 147)
+
+for _op in stream_0._flat_seq:
+        print([_op], 
+              _op._input if isinstance(_op, FlattenOperator) else None,
+              _op._output if isinstance(_op, FlattenOperator) else None)
+print('=========')
+for _op in stream_offload_linear_qkv_148._flat_seq:
+        print([_op], 
+              _op._input if isinstance(_op, FlattenOperator) else None,
+              _op._output if isinstance(_op, FlattenOperator) else None)
+FlattenEngine().evaluation([stream_0, stream_offload_linear_qkv_148], 10)

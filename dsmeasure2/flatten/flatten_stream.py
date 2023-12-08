@@ -15,54 +15,104 @@ from dsmeasure2.core.dsm_operator import AbstractOperatorConfig, \
 from dsmeasure2.core.dsm_device_mng import DeviceManager
 from dsmeasure2.device.device_cuda import DeviceCUDA
 from dsmeasure2.device.device_pcie import DevicePCIE4
+from dsmeasure2.core.dsm_operator_mng import OperatorManager
 
 from dsmeasure2.graph.tensor_define import ActivationTensor, WeightTensor, TensorState
 from dsmeasure2.flatten.flatten_operator import FlattenOperator, FlattenInitiate
 
-class FlattenController(AbstractOperator):
-    def __init__(self, config: AbstractOperatorConfig, callback: Callable[..., Any] = None):
+class FlattenController(OpStaticDerivative):
+    def __init__(self, config: OperatorCustomConfig, callback: Callable[..., Any] = None):
         super().__init__(config)
         self._prev_done = self._next = self._prev = None
         self._callback: Callable[..., Any] = callback
+        self._subop = []
 
     def add_next(self, next_op):
         raise Exception("flatten operator does not support add_next")
-        
-class FlattenBranch(FlattenController):
-    def __init__(self, config: AbstractOperatorConfig,
-                 branch_dst: Any, 
-                 callback: Callable[..., Any] = None):
-        super().__init__(config, callback)
-        self._flatten_stream_to: FlattenStream = branch_dst
     
-    def apply(self) -> bool:
-        self._flatten_stream_to._activate = True
+    def apply(self):
+        self._callback() if self._callback else None
         return True
-
+        
 class FlattenStream:
     def __init__(self, 
-                 flat_seq: list[FlattenOperator|FlattenInitiate], 
-                 boot_pnt: int=0, 
+                 flat_seq: list[int]|list[FlattenOperator|FlattenInitiate|FlattenController], 
                  reentrant: bool=False) -> None:
-        self._flat_seq = flat_seq
-        self._stream_cnt = -boot_pnt
+        self._flat_seq: list[FlattenOperator|FlattenInitiate|FlattenController] = \
+                [OperatorManager().find(_id) for _id in flat_seq] \
+                    if isinstance(flat_seq[0], int) else flat_seq
+        self._stream_cnt = 0
         self._activate = False
         self._idle = True
         self._reentrant = reentrant
 
-    def forward(self) -> FlattenInitiate|FlattenOperator|None:
-        if not self._activate:
+    @property
+    def finish(self) -> bool:
+        return self._stream_cnt >= len(self._flat_seq)
+    
+    @property
+    def pause(self) -> bool:
+        return self._stream_cnt < len(self._flat_seq) and not self._activate
+    
+    def forward(self) -> FlattenInitiate|FlattenOperator|FlattenController|None:
+        if not self._activate or \
+            0 > self._stream_cnt or self._stream_cnt >= len(self._flat_seq):
             return None
-        self._stream_cnt += 1
+        
         def _callback():
             self._activate = True
-        if 0 <= self._stream_cnt < len(self._flat_seq):
-            self._flat_seq[self._stream_cnt].callback = _callback
-            return self._flat_seq[self._stream_cnt].apply()
-        return None
+            self._stream_cnt += 1
+        def _callback_pause():
+            self._stream_cnt += 1
+            
+        self._flat_seq[self._stream_cnt]._callback = \
+            _callback_pause if isinstance(self._flat_seq[self._stream_cnt], FlattenPause) else _callback
+        
+        self._activate = False
+        return self._flat_seq[self._stream_cnt]
+    
+    def reset(self):
+        self._stream_cnt = 0
+        self._activate = False
+        for _flat_op in self._flat_seq:
+            _flat_op._callback = None
+            _flat_op.reset() if not isinstance(_flat_op, FlattenController) else None
 
     def __iter__(self):
         return iter(self._flat_seq)
     
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> FlattenInitiate|FlattenOperator|FlattenController:
         return self._flat_seq[index]
+
+class FlattenBranch(FlattenController):
+    def __init__(self, config: OperatorCustomConfig,
+                 branch_dst: list[FlattenStream],
+                 callback: Callable[..., Any] = None):
+        super().__init__(config, callback)
+        
+        self._flatten_stream_to: list[FlattenStream] = branch_dst
+        
+    def apply(self) -> bool:
+        for _to in self._flatten_stream_to:
+            _to._activate = True
+        return super().apply()
+    
+class FlattenMerge(FlattenController):
+    def __init__(self, config: OperatorCustomConfig,
+                 branch_src: list[FlattenStream],
+                 callback: Callable[..., Any] = None):
+        super().__init__(config, callback)
+
+        self._flatten_stream_from: list[FlattenStream] = branch_src
+
+    def apply(self) -> bool:
+        return (False not in [_from.finish or _from.pause for _from in self._flatten_stream_from]) \
+            and super().apply()
+    
+class FlattenPause(FlattenController):
+    def __init__(self, config: OperatorCustomConfig,
+                 callback: Callable[..., Any] = None):
+        super().__init__(config, callback)
+
+    def apply(self) -> bool:
+        return super().apply()

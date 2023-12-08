@@ -25,3 +25,4 @@ from dsmeasure2.graph.tensor_define import ActivationTensor, WeightTensor, Tenso
 
 from dsmeasure2.flatten.flatten_operator import FlattenOperator, FlattenInitiate
 
+# class FlattenDrop()

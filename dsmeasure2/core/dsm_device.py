@@ -73,3 +73,6 @@ class AbstractDevice(ABC):
     @abstractmethod
     def is_idle(self):
         pass
+    @abstractmethod
+    def reset(self):
+        pass

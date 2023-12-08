@@ -108,3 +108,9 @@ class DeviceCUDA(AbstractDevice):
         
     def is_idle(self):
         return self.computational_job_run == False and len(self.non_computational_queue) == 0
+    
+    def reset(self):
+        self.memory_used= int(0)
+        self.computational_job_run = False
+        self.computational_job = None
+        self.non_computational_queue = []

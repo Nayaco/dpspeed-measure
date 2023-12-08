@@ -81,6 +81,20 @@ def convert_graph_to_flatten_seq(operators: list[int], graph_head: list[int] = [
     _flatten_op_seq_ret = []
     o_mng = OperatorManager()
     t_mng = TensorManager()
+
+    _tensor_map = {}
+
+    def _tensor_mapping(_tensors: list[int]):
+        _ret = []
+        for _tensor in _tensors:
+            if _tensor not in _tensor_map:
+                _T = t_mng.register(ActivationTensor(tensor_size=t_mng.find(_tensor).tensor_size))
+                _ret.append(_T)
+                _tensor_map[_tensor] = _T.tensor_uid
+            else:
+                _ret.append(t_mng.find(_tensor_map[_tensor]))
+        return _ret
+    
     for _op_uid in _flatten_op_seq:
         _flatten_op: FlattenOperator|FlattenInitiate = \
                 o_mng.register(
@@ -90,57 +104,56 @@ def convert_graph_to_flatten_seq(operators: list[int], graph_head: list[int] = [
                     FlattenInitiate(OperatorComputationalConfig(op_name=(o_mng.operators[_op_uid]._config.op_name+'.')[:-1])) )
         _flatten_op_seq_ret.append(_flatten_op._config.op_uid)
         if isinstance(o_mng.operators[_op_uid], UnaryOperator):
-            _flatten_op.input = [t_mng.register(
-                    ActivationTensor(tensor_size=o_mng.operators[_op_uid].input.tensor_size) ),]
-            _flatten_op.output = [t_mng.register(
-                    ActivationTensor(tensor_size=_output.tensor_size) ) 
-                for _output in o_mng.operators[_op_uid].output ]
-            _flatten_op.weight = None if o_mng.operators[_op_uid].weight is None else t_mng.register(
-                    WeightTensor(tensor_size=o_mng.operators[_op_uid].weight.tensor_size) )
-            _flatten_op.intermediate_memory = o_mng.operators[_op_uid].intermediate_memory
-            _flatten_op.estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
-            _flatten_op.device_name = o_mng.operators[_op_uid].device_name.copy()
-            _flatten_op.callback = None
+            # input
+            _flatten_op._input = _tensor_mapping([o_mng.operators[_op_uid].input.tensor_uid])
+            # output
+            _flatten_op._output = _tensor_mapping([_o.tensor_uid for _o in o_mng.operators[_op_uid].output])
+            # weight
+            _flatten_op._weight = None if o_mng.operators[_op_uid].weight is None else \
+                                  _tensor_mapping([o_mng.operators[_op_uid].weight.tensor_uid])[0]
+            # others
+            _flatten_op._intermediate_memory = o_mng.operators[_op_uid].intermediate_memory
+            _flatten_op._estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
+            _flatten_op._device_name = o_mng.operators[_op_uid].device_name.copy()
+            _flatten_op._callback = None
         elif isinstance(o_mng.operators[_op_uid], BinaryOperator):
-            _flatten_op.input = [t_mng.register(
-                    ActivationTensor(tensor_size=o_mng.operators[_op_uid].input_a.tensor_size) ),
-                                 t_mng.register(
-                    ActivationTensor(tensor_size=o_mng.operators[_op_uid].input_b.tensor_size) ),]
-            _flatten_op.output = [t_mng.register(
-                    ActivationTensor(tensor_size=_output.tensor_size) ) 
-                for _output in o_mng.operators[_op_uid].output ]
-            _flatten_op.weight = None if o_mng.operators[_op_uid].weight is None else t_mng.register(
-                    WeightTensor(tensor_size=o_mng.operators[_op_uid].weight.tensor_size) )
-            _flatten_op.intermediate_memory = o_mng.operators[_op_uid].intermediate_memory
-            _flatten_op.estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
-            _flatten_op.device_name = o_mng.operators[_op_uid].device_name.copy()
-            _flatten_op.callback = None
+            # input
+            _flatten_op._input = _tensor_mapping([o_mng.operators[_op_uid].input_a.tensor_uid,
+                                                  o_mng.operators[_op_uid].input_b.tensor_uid,])
+            # output
+            _flatten_op._output = _tensor_mapping([_o.tensor_uid for _o in o_mng.operators[_op_uid].output])
+            # weight
+            _flatten_op._weight = None if o_mng.operators[_op_uid].weight is None else \
+                                  _tensor_mapping([o_mng.operators[_op_uid].weight.tensor_uid])[0]
+            # others
+            _flatten_op._intermediate_memory = o_mng.operators[_op_uid].intermediate_memory
+            _flatten_op._estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
+            _flatten_op._device_name = o_mng.operators[_op_uid].device_name.copy()
+            _flatten_op._callback = None
         elif isinstance(o_mng.operators[_op_uid], TernaryOperator):
-            _flatten_op.input = [t_mng.register(
-                    ActivationTensor(tensor_size=o_mng.operators[_op_uid].input_a.tensor_size) ),
-                                 t_mng.register(
-                    ActivationTensor(tensor_size=o_mng.operators[_op_uid].input_b.tensor_size) ),
-                                 t_mng.register(
-                    ActivationTensor(tensor_size=o_mng.operators[_op_uid].input_c.tensor_size) ),]
-            _flatten_op.output = [t_mng.register(
-                    ActivationTensor(tensor_size=_output.tensor_size) ) 
-                for _output in o_mng.operators[_op_uid].output ]
-            _flatten_op.weight = None if o_mng.operators[_op_uid].weight is None else t_mng.register(
-                    WeightTensor(tensor_size=o_mng.operators[_op_uid].weight.tensor_size) )
-            _flatten_op.intermediate_memory = o_mng.operators[_op_uid].intermediate_memory
-            _flatten_op.estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
-            _flatten_op.device_name = o_mng.operators[_op_uid].device_name.copy()
-            _flatten_op.callback = None
+            # input
+            _flatten_op._input = _tensor_mapping([o_mng.operators[_op_uid].input_a.tensor_uid,
+                                                  o_mng.operators[_op_uid].input_b.tensor_uid,
+                                                  o_mng.operators[_op_uid].input_c.tensor_uid,])
+            # output
+            _flatten_op._output = _tensor_mapping([_o.tensor_uid for _o in o_mng.operators[_op_uid].output])
+            # weight
+            _flatten_op._weight = None if o_mng.operators[_op_uid].weight is None else \
+                                  _tensor_mapping([o_mng.operators[_op_uid].weight.tensor_uid])[0]
+            # others
+            _flatten_op._intermediate_memory = o_mng.operators[_op_uid].intermediate_memory
+            _flatten_op._estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
+            _flatten_op._device_name = o_mng.operators[_op_uid].device_name.copy()
+            _flatten_op._callback = None
         elif isinstance(o_mng.operators[_op_uid], InitiateOperator):
-            _flatten_op.inputs = [t_mng.register(
-                    ActivationTensor(tensor_size=_input.tensor_size) ) 
-                for _input in o_mng.operators[_op_uid].inputs ]
-            _flatten_op.weight = [t_mng.register(
-                    WeightTensor(tensor_size=_weight.tensor_size) ) 
-                for _weight in o_mng.operators[_op_uid].weight ]
-            _flatten_op.estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
-            _flatten_op.device_name = (o_mng.operators[_op_uid].device_name+'.')[:-1]
-            _flatten_op.callback = None
+            # network data input
+            _flatten_op._inputs = _tensor_mapping([_i.tensor_uid for _i in o_mng.operators[_op_uid].inputs])
+            # network weight 
+            _flatten_op._weight = _tensor_mapping([_w.tensor_uid for _w in o_mng.operators[_op_uid].weight])
+            # others
+            _flatten_op._estimate_runtime = o_mng.operators[_op_uid].estimate_runtime
+            _flatten_op._device_name = (o_mng.operators[_op_uid].device_name+'.')[:-1]
+            _flatten_op._callback = None
         else:
             raise Exception("Unknown operator type")
     return _flatten_op_seq_ret
