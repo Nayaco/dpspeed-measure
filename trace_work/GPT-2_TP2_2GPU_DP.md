@@ -105,7 +105,7 @@ Layer name: language_model.encoder.final_layernorm.bias, Layer size: torch.Size(
 - (13) 最后一层Layernorm权重+偏置： [hidden-size] + [hidden-size] = [1792] + [1792] = 2×h
 
 
-总结模型大小为：V×h + P×h + (12×h×h/T + (6+7/T)×h)×l + 2×h，其中V为字典维度，P为位置向量维度，h为Embedding的维度，l为Transformer层数，T为TP的并行度。
+总结模型大小为：V×h/T + P×h + (12×h×h/T + (6+7/T)×h)×l + 2×h，其中V为字典维度，P为位置向量维度，h为Embedding的维度，l为Transformer层数，T为TP的并行度。
 
 在当前测试模型下，大小为 25216 * 1792 + 1024 * 1792 + (12 * 1792 * 1792 / 2 + (6 + 7/2) * 1792) * 32 + 2 * 1792
 
