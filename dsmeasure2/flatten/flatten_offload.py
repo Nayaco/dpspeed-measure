@@ -109,7 +109,9 @@ class FlattenLoadin(OpStaticNonComputational):
     def reset(self) -> None:
         super().reset()
 
-def make_passive_offload(_main_stream: FlattenStream, _source_op_index: int, _offload_uid: int):
+def make_passive_offload(_main_stream: FlattenStream, 
+                         _source_op_index: int, 
+                         _offload_uid: int) -> FlattenStream:
     assert True in [_input.tensor_uid == _offload_uid for _input in _main_stream[_source_op_index]._input], \
         "offload tensor not found"
     
@@ -143,19 +145,17 @@ def make_passive_offload(_main_stream: FlattenStream, _source_op_index: int, _of
             op_name=_main_stream[_source_op_index]._config.op_name+'_branch_offload'),
             [_offload_stream]) )
     _main_stream._flat_seq.insert(_source_op_index+1, _branch_op_offload)
-    _target_op_index += 1
     
     _branch_op_loadin: FlattenBranch = OperatorManager().register(
         FlattenBranch(OperatorCustomConfig(
             op_name=_main_stream[_source_op_index]._config.op_name+'_branch_loadin'),
             [_offload_stream]) )
-    _main_stream._flat_seq.insert(_target_op_index, _branch_op_loadin)
-    _target_op_index += 1
+    _main_stream._flat_seq.insert(_target_op_index+1, _branch_op_loadin)
 
     _merge_op: FlattenMerge = OperatorManager().register(
         FlattenMerge(OperatorCustomConfig(
             op_name=_main_stream[_source_op_index]._config.op_name+'_merge'),
             [_offload_stream]) )
-    _main_stream._flat_seq.insert(_target_op_index, _merge_op)
+    _main_stream._flat_seq.insert(_target_op_index+2, _merge_op)
 
     return _offload_stream

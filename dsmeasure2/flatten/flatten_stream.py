@@ -53,7 +53,7 @@ class FlattenStream:
     
     @property
     def pause(self) -> bool:
-        return self._stream_cnt < len(self._flat_seq) and not self._activate and self._pause
+        return self._stream_cnt < len(self._flat_seq) and (not self._activate) and self._pause
     
     def forward(self) -> FlattenInitiate|FlattenOperator|FlattenController|None:
         if not self._activate or \

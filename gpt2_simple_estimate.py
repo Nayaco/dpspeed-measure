@@ -45,10 +45,11 @@ from dsmeasure2.graph.gpt2_sequence    import make_gpt_2
 from dsmeasure2.engine import CostEngine
 from dsmeasure2.flatten.flatten import flatten, convert_graph_to_flatten_seq
 from dsmeasure2.flatten.flatten_engine import FlattenEngine
-from dsmeasure2.flatten.flatten_stream import FlattenStream
+from dsmeasure2.flatten.flatten_stream import FlattenStream, stream_synchronize
 from dsmeasure2.flatten.flatten_operator import FlattenInitiate, FlattenOperator
 
 from dsmeasure2.flatten.flatten_offload import make_passive_offload
+from dsmeasure2.flatten.flatten_checkpoint import make_entire_checkpoint
 
 gpt2 = make_gpt_2(
         compute_time_linear_qkv=490,
@@ -99,7 +100,7 @@ gpt2 = make_gpt_2(
         tensor_parallel=1,
         precision=2,
 
-        transfomer_block_num=2
+        transfomer_block_num=1
     )
 for _op in gpt2:
         OperatorManager().register(_op)
@@ -118,15 +119,18 @@ stream_0 = FlattenStream(seq2)
 #               OperatorManager().find(_op)._input if isinstance(OperatorManager().find(_op), FlattenOperator) else None,
 #               OperatorManager().find(_op)._output if isinstance(OperatorManager().find(_op), FlattenOperator) else None)
 
-stream_offload_linear_qkv_148 = make_passive_offload(stream_0, 2, 147)
+# stream_offload_linear_qkv_148 = make_passive_offload(stream_0, 2, 147)
+stream_checkpoint_full_block = make_entire_checkpoint(stream_0, 1, 16, 19)
+stream_synchronize(stream_0, [stream_checkpoint_full_block], 19)
 
-for _op in stream_0._flat_seq:
+for _i, _op in enumerate(stream_0._flat_seq):
+        print(_i, [_op], 
+              _op._input if isinstance(_op, FlattenOperator) else None,
+              _op._output if isinstance(_op, FlattenOperator) else None)
+print('=========')
+for _op in stream_checkpoint_full_block._flat_seq:
         print([_op], 
               _op._input if isinstance(_op, FlattenOperator) else None,
               _op._output if isinstance(_op, FlattenOperator) else None)
 print('=========')
-for _op in stream_offload_linear_qkv_148._flat_seq:
-        print([_op], 
-              _op._input if isinstance(_op, FlattenOperator) else None,
-              _op._output if isinstance(_op, FlattenOperator) else None)
-FlattenEngine().evaluation([stream_0, stream_offload_linear_qkv_148], 10)
+FlattenEngine().evaluation([stream_0, stream_checkpoint_full_block], 10, verbose=True)

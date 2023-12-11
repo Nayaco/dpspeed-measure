@@ -60,13 +60,13 @@ class FlattenOperator(OpStaticComputational):
         def _apply_cb():
             for _output in self._output:
                 _output.materialize()
-            if not self._checkpointing:
-                for _input in self._input:
-                    _input.ref_count -= 1
+            # if not self._checkpointing:
+            for _input in self._input:
+                _input.ref_count -= 1
             mem_free = sum(
                 [_input.clear_state() for _input in self._input if _input.ref_count == 0])
             if mem_free:
-                _devices[0].occupy(10, None, memory=-mem_free, computational=False)
+                _devices[0].occupy(1, None, memory=-mem_free, computational=False)
             self._callback() if self._callback is not None else None
         
         # un-computational device occupy 1us won't fail

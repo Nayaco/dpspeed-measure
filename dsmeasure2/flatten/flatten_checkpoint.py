@@ -55,20 +55,61 @@ class FlattenDrop(OpStaticNonComputational):
             for _tensor in self._tensors:
                 _tensor.destroy()
             self._callback() if self._callback is not None else None
-
-        # un-computational device occupy 10us won't fail
-        return _device_0.occupy(1, None, memory=-_tensor_size_tot, computational=False)
+        # un-computational device occupy <10us won't fail
+        return _device_0.occupy(1, _apply_cb, memory=-_tensor_size_tot, computational=False)
     
     def reset(self) -> None:
         super().reset()
 
-def make_checkpoint(_main_stream: FlattenStream, _source_op_index: int, _offload_uid: int):
+def make_entire_checkpoint(_main_stream: FlattenStream, 
+                    _source_op_index_from: int, _source_op_index_to: int, 
+                    _target_op_index_from: int) -> FlattenStream:
+    _drop_tensors: list[ActivationTensor] = []
+    _flatten_checkpoints: list[FlattenOperator] = []
+    for _op in _main_stream._flat_seq[_source_op_index_from:_source_op_index_to]:
+        _drop_tensors.extend(_op._output)
+        _flatten_checkpoints.append(OperatorManager().register(
+            FlattenOperator(OperatorComputationalConfig(
+                op_name=_op._config.op_name+'_checkpoint',),
+                checkpointing=True) ))
+        _flatten_checkpoints[-1]._input = _op._input
+        _flatten_checkpoints[-1]._output = _op._output
+        _flatten_checkpoints[-1]._weight = _op._weight
+        _flatten_checkpoints[-1]._intermediate_memory = _op._intermediate_memory
+        _flatten_checkpoints[-1]._estimate_runtime = _op._estimate_runtime
+        _flatten_checkpoints[-1]._device_name = _op._device_name
     
-    _checkpoint_stream = FlattenStream(
-        [])
-        
+    _flatten_drop: FlattenDrop = OperatorManager().register(
+        FlattenDrop(OperatorNonComputationalConfig(
+            op_name=_main_stream._flat_seq[_source_op_index_from]._config.op_name+'_drop')) )
+    _flatten_drop._tensors = _drop_tensors
+    _flatten_pause: FlattenPause = OperatorManager().register(
+        FlattenPause(OperatorNonComputationalConfig(
+            op_name=_main_stream._flat_seq[_source_op_index_from]._config.op_name+'_pause')) )
+
+    _checkpoint_stream = FlattenStream([_flatten_drop, _flatten_pause, *_flatten_checkpoints])
+    
     _branch_op_checkpoint: FlattenBranch = OperatorManager().register(
         FlattenBranch(OperatorCustomConfig(
-            op_name=_main_stream[_source_op_index]._config.op_name+'_branch_checkpoint'),
-            [_offload_stream]) )
-    _main_stream._flat_seq.insert(_source_op_index+1, _branch_op_offload)
+            op_name=_main_stream[_source_op_index_from]._config.op_name + '_' + \
+                    _main_stream[_source_op_index_to]._config.op_name + \
+                    '_branch_checkpoint'),
+            [_checkpoint_stream]) )
+    _main_stream._flat_seq.insert(_source_op_index_to+1, _branch_op_checkpoint)
+    
+    _branch_op_rematerialize: FlattenBranch = OperatorManager().register(
+        FlattenBranch(OperatorCustomConfig(
+            op_name=_main_stream[_source_op_index_from]._config.op_name + '_' + \
+                    _main_stream[_source_op_index_to]._config.op_name + \
+                    '_branch_rematerialize'),
+            [_checkpoint_stream]) )
+    _main_stream._flat_seq.insert(_target_op_index_from+1, _branch_op_rematerialize)
+    _merge_op_rematerialize: FlattenMerge = OperatorManager().register(
+        FlattenMerge(OperatorCustomConfig(
+            op_name=_main_stream[_source_op_index_from]._config.op_name + '_' + \
+                    _main_stream[_source_op_index_to]._config.op_name + \
+                    '_merge_rematerialize'),
+            [_checkpoint_stream]) )
+    _main_stream._flat_seq.insert(_target_op_index_from+2, _merge_op_rematerialize)
+
+    return _checkpoint_stream
