@@ -28,8 +28,10 @@ class Communication_Operator:
         self.last_use_time = -1
         self.livetime = -1
 
-Transformer_Block = 3 # 
-communication_time = 4 # 反传通信时间，ms
+Transformer_Block = 32 # 
+communication_time = 1 # 反传通信时间，ms
+Memory_saving = 19000 #目标节省的显存值 - MB
+
 op_array = [] # 所有操作的数组
 transformer_op_array = [] # Transformer块的数组
 transformer_op_array_forward = [] # Transformer块前传的数组
@@ -158,17 +160,19 @@ for i in range(Transformer_Block): # 生成所有产生Activation的算子id
         tensor_container_id.append(j + i*14)
 
 
-Memory_saving = 1500 #目标节省的显存值 - MB
+
 policy_time, policy_space = tools.get_policy_time_space(tensor_container_id_base,transformer_op_array_forward)
 training_time = tools.get_policy_time(transformer_op_array)
-print("模型训练时间 (ms)：",training_time)
-print("Deepspeed重计算模型训练时间 (ms)：",training_time + Transformer_Block * tools.get_policy_time(transformer_op_array_forward))
-print("总Activation空间大小 (MB)：",policy_space * Transformer_Block)
-print("目标优化空间大小 (MB)：",Memory_saving)
+
 min_policy_training_time = 1000000000
 best_policy_count = -1
-count = 0
-for each_policy in pipeline_policy:
+best_pipeline_tensor_id = []
+best_swap_candidate_id = []
+best_compression_tensor_id = []
+
+print("共有策略（个）：",len(pipeline_policy))
+for count in range(len(pipeline_policy)):
+    each_policy = pipeline_policy[count]
     remaining_tensor_id = copy.deepcopy(tensor_container_id)#重计算后剩余的tensor
     pipeline_tensor_id = [] #使用可并行重计算的tensor
     stable_tensor_id = [] #固定在显存中的tensor
@@ -182,14 +186,21 @@ for each_policy in pipeline_policy:
             if (j-1) not in each_policy:
                 stable_tensor_id.append((j-1) + i*14)
     print("========================== 搜索策略:",count,"==================================")
-    training_time_after_policy = search_algorithm.policy_generate(Memory_saving, transformer_op_array, pipeline_tensor_id, remaining_tensor_id, stable_tensor_id, end_forward_id, Transformer_Block, training_time)
+    training_time_after_policy,pipeline_tensor_id, swap_candidate_id, compression_tensor_id = search_algorithm.policy_generate(Memory_saving, transformer_op_array, pipeline_tensor_id, remaining_tensor_id, stable_tensor_id, end_forward_id, Transformer_Block, training_time)
     print("===========================================================================\n\n")
 
     if training_time_after_policy!=0:
         if training_time_after_policy<min_policy_training_time:
             min_policy_training_time = training_time_after_policy
             best_policy_count = count
-    count+=1
+            best_pipeline_tensor_id = pipeline_tensor_id
+            best_swap_candidate_id = swap_candidate_id
+            best_compression_tensor_id = compression_tensor_id
     # exit()
-print("Best case: ",best_policy_count,"; training time: ",min_policy_training_time)
+
+print("模型训练时间 (ms)：",training_time)
+print("Deepspeed重计算模型训练时间 (ms)：",training_time + Transformer_Block * tools.get_policy_time(transformer_op_array_forward))
+print("总Activation空间大小 (MB)：",policy_space * Transformer_Block)
+print("目标优化空间大小 (MB)：",Memory_saving)
+print("Best case: ",best_policy_count,"; training time: ",min_policy_training_time,"; Pipeline Recomputation: ",best_pipeline_tensor_id, "; Swap: ",best_swap_candidate_id,"; Compression+Swap: ",best_compression_tensor_id)
 
