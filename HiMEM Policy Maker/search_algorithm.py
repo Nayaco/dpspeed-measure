@@ -49,6 +49,9 @@ def swap_policy(remaining_tensor_id, transformer_op_array, end_forward_id):
 """
 制定压缩+转移策略;
 """
+
+# 重写=>将转移的数据逐个压缩，看是否能新加入可并行swap的tensor，如果不够持续上述过程；
+
 def compression_swap_policy(Memory_saving,stable_tensor_id, remaining_tensor_id, transformer_op_array, end_forward_id, Transformer_Block):
     import tools,copy
     transformer_op_array_compression_swap = copy.deepcopy(transformer_op_array)
@@ -66,16 +69,21 @@ def compression_swap_policy(Memory_saving,stable_tensor_id, remaining_tensor_id,
         transformer_op_array_compression_swap[transformer_op_array_compression_swap[compression_candidate].backward_id].compute_time += compression_time #将解压缩时间加入到计算时间上
         transformer_op_array_compression_swap[compression_candidate].output_size = compressed_size #更新输出数据大小
         transformer_op_array_compression_swap = tools.time_build(transformer_op_array_compression_swap, end_forward_id, Transformer_Block) #更新算子信息
+        
+        
+        # 有前后影响，加入33后，有可能22就可以能转移了，本来是不可以转移的
+
+
 
         compression_swap_candidate_id = swap_policy(remaining_tensor_id, transformer_op_array_compression_swap, end_forward_id) # 尝试对compression_candidate进行压缩，并生成转移策略
         # print(compression_candidate, compression_swap_candidate_id)
+        print("Compre:",compression_candidate,compression_swap_candidate_id,compression_tensor_id)
         if compression_candidate not in compression_swap_candidate_id: #判断该数据压缩后还是无法转移，所以没有必要压缩，还原数据
-            
             transformer_op_array_compression_swap[compression_candidate].compute_time -= compression_time
             transformer_op_array_compression_swap[transformer_op_array_compression_swap[compression_candidate].backward_id].compute_time -= compression_time
             transformer_op_array_compression_swap[compression_candidate].output_size = compressed_size * 2
             continue
-
+        
 
 
         compression_tensor_id.append(compression_candidate)
@@ -86,8 +94,13 @@ def compression_swap_policy(Memory_saving,stable_tensor_id, remaining_tensor_id,
             for i in compression_tensor_id:
                 compression_swap_candidate_id.remove(i)
             # print("压缩+转移的Tensor：",compression_tensor_id, "; 只转移的Tensor：",compression_swap_candidate_id)
-            return compression_tensor_id, compression_swap_candidate_id, save_memory_compression_swap,training_time_after_policy
-    return 0,0, save_memory_compression_swap,0
+            return 1,compression_tensor_id, compression_swap_candidate_id, save_memory_compression_swap,training_time_after_policy
+    # print("COmpression: ",compression_tensor_id, compression_swap_candidate_id)
+    return 0,compression_tensor_id, compression_swap_candidate_id,save_memory_compression_swap,0
+
+def best_policy_for_tensor(Memory_saving,stable_tensor_id, remaining_tensor_id, transformer_op_array, end_forward_id, Transformer_Block):
+    return 0
+
 
 """
 Memory_saving: 目标优化的显存值；
@@ -130,14 +143,28 @@ def policy_generate(Memory_saving, transformer_op_array, pipeline_tensor_id, rem
     
     ####
     #### 压缩+转移
-    compression_tensor_id, swap_candidate_id, save_memory_compression_swap,training_time_after_policy = compression_swap_policy(Memory_saving, stable_tensor_id, remaining_tensor_id, transformer_op_array, end_forward_id, Transformer_Block)
-    if compression_tensor_id == 0:
-        print("(Step - 3 没找到解) 压缩+转移释放的最大显存量为：",save_memory_compression_swap,"；剩余存储优化目标：",Memory_saving - save_memory_compression_swap)
+    flag, compression_tensor_id, swap_candidate_id, save_memory_compression_swap,training_time_after_policy = compression_swap_policy(Memory_saving, stable_tensor_id, remaining_tensor_id, transformer_op_array, end_forward_id, Transformer_Block)
+    if flag == 0:
+        for i in swap_candidate_id:
+            remaining_tensor_id.remove(i)
+
+        for i in compression_tensor_id:
+            swap_candidate_id.remove(i)
+        print("(Step - 3 没找到解) 压缩+转移释放的最大显存量为：",save_memory_compression_swap,"；剩余存储优化目标：",Memory_saving - save_memory_compression_swap, "；压缩+转移的数据：",compression_tensor_id, "；只转移的数据：",swap_candidate_id, "；剩余Tensor：",remaining_tensor_id)
         print()
-        return 0
     else:
         print("找到解，选择Pipeline重计算+压缩转移+转移的策略:",pipeline_tensor_id, compression_tensor_id, swap_candidate_id, "；训练时间为 (ms)：",training_time_after_policy)
         print()
         return training_time_after_policy
+
+
+    ####
+    #### 对剩余Tensor选择最优策略
+    Memory_saving = Memory_saving - save_memory_compression_swap
+    
+    best_policy_for_tensor(Memory_saving, stable_tensor_id, remaining_tensor_id, "transformer_op_array", end_forward_id, Transformer_Block)
+    print(Memory_saving)
+
+    return 0
 
 

@@ -29,7 +29,7 @@ class Communication_Operator:
         self.livetime = -1
 
 Transformer_Block = 3 # 
-communication_time = 0.5 # 反传通信时间，ms
+communication_time = 4 # 反传通信时间，ms
 op_array = [] # 所有操作的数组
 transformer_op_array = [] # Transformer块的数组
 transformer_op_array_forward = [] # Transformer块前传的数组
@@ -158,10 +158,11 @@ for i in range(Transformer_Block): # 生成所有产生Activation的算子id
         tensor_container_id.append(j + i*14)
 
 
-Memory_saving = 800 #目标节省的显存值 - MB
+Memory_saving = 1500 #目标节省的显存值 - MB
 policy_time, policy_space = tools.get_policy_time_space(tensor_container_id_base,transformer_op_array_forward)
 training_time = tools.get_policy_time(transformer_op_array)
 print("模型训练时间 (ms)：",training_time)
+print("Deepspeed重计算模型训练时间 (ms)：",training_time + Transformer_Block * tools.get_policy_time(transformer_op_array_forward))
 print("总Activation空间大小 (MB)：",policy_space * Transformer_Block)
 print("目标优化空间大小 (MB)：",Memory_saving)
 min_policy_training_time = 1000000000

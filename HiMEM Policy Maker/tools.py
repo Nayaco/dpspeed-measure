@@ -24,8 +24,9 @@ def time_build(transformer_op_array, end_forward_id, Transformer_Block):
             transformer_op_array[op_id].livetime = live_time # 赋予生命周期
     return transformer_op_array
 
-
-# 计算重计算算子的总时间与空间
+"""
+计算重计算算子的总时间与空间
+"""
 def get_policy_time_space(policy, transformer_op_array_forward):
     total_time = 0
     total_space = 0
@@ -34,7 +35,9 @@ def get_policy_time_space(policy, transformer_op_array_forward):
         total_space += transformer_op_array_forward[i-1].output_size
     return total_time, total_space
 
-# 计算训练总时间
+"""
+计算训练总时间
+"""
 def get_policy_time(transformer_op_array):
     total_time = 0
     for i in range(len(transformer_op_array)):
